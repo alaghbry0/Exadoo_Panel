@@ -3,71 +3,71 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import Icon from "@mui/material/Icon"; // Import Icon for visual enhancements
-import { styled } from "@mui/material/styles"; // Import styled for custom styling
+import Icon from "@mui/material/Icon";
+import { styled } from "@mui/material/styles";
+import MDButton from "components/MDButton";
+import MDTypography from "components/MDTypography";
+import MDBox from "components/MDBox";
 
-// Styled Dialog Title for better visual hierarchy
+// Styled components لتحسين تنسيق العناوين والمحتوى والإجراءات
 const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
   "&.MuiDialogTitle-root": {
-    padding: theme.spacing(3), // Increased padding
-    textAlign: "center", // Center align the title
-    fontWeight: "bold", // Make title bold
-    fontSize: "1.5rem", // Increased font size
-    color: theme.palette.text.primary, // Use primary text color from theme
+    padding: theme.spacing(3),
+    textAlign: "center",
+    fontWeight: "bold",
+    fontSize: "1.5rem",
+    color: theme.palette.text.primary,
   },
 }));
 
-// Styled Dialog Content for better readability
 const StyledDialogContent = styled(DialogContent)(({ theme }) => ({
   "&.MuiDialogContent-root": {
-    padding: theme.spacing(3), // Increased padding
-    textAlign: "center", // Center align the text
+    padding: theme.spacing(3),
+    textAlign: "center",
   },
 }));
 
-// Styled Dialog Actions for better button alignment and spacing
 const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
   "&.MuiDialogActions-root": {
-    padding: theme.spacing(2, 3, 3, 3), // Adjusted padding for actions
-    justifyContent: "center", // Center buttons in the action area
+    padding: theme.spacing(2, 3, 3, 3),
+    justifyContent: "center",
   },
 }));
 
 function ConfirmDeleteDialog({ open, onClose, onConfirm, itemName }) {
   return (
     <Dialog open={open} onClose={onClose}>
-      <StyledDialogTitle>Confirm Deletion {/* English Dialog Title */}</StyledDialogTitle>
+      <StyledDialogTitle>
+        <MDTypography variant="h5" fontWeight="bold">
+          Confirm Deletion
+        </MDTypography>
+      </StyledDialogTitle>
       <StyledDialogContent>
-        <Typography variant="body1" color="textSecondary">
-          {" "}
-          {/* Use body1 and textSecondary for message */}
-          Are you sure you want to delete
-          <Typography variant="body1" component="strong" color="error">
-            {" "}
-            {/* Strong and error color for item name */}
-            &nbsp;{itemName}&nbsp;
-          </Typography>{" "}
+        <MDTypography variant="body1" color="text">
+          Are you sure you want to delete{" "}
+          <MDTypography component="span" variant="body1" color="error" fontWeight="bold">
+            {itemName}
+          </MDTypography>{" "}
           ? This action cannot be undone.
-        </Typography>
+        </MDTypography>
       </StyledDialogContent>
       <StyledDialogActions>
-        <Button
-          onClick={onClose}
-          color="primary"
+        <MDButton
           variant="outlined"
+          color="primary"
+          onClick={onClose}
           startIcon={<Icon>cancel</Icon>}
         >
-          {" "}
-          {/* Cancel Button with Icon */}
-          Cancel {/* English Cancel Button Text */}
-        </Button>
-        <Button onClick={onConfirm} color="error" variant="contained" endIcon={<Icon>delete</Icon>}>
-          {" "}
-          {/* Delete Button with Icon and contained variant */}
-          Delete {/* English Delete Button Text */}
-        </Button>
+          Cancel
+        </MDButton>
+        <MDButton
+          variant="contained"
+          color="error"
+          onClick={onConfirm}
+          endIcon={<Icon>delete</Icon>}
+        >
+          Delete
+        </MDButton>
       </StyledDialogActions>
     </Dialog>
   );

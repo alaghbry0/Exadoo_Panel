@@ -5,7 +5,7 @@ import Card from "@mui/material/Card";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
-import Button from "@mui/material/Button";
+import MDButton from "components/MDButton"; // تم الاستبدال هنا
 import IconButton from "@mui/material/IconButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import InputAdornment from "@mui/material/InputAdornment";
@@ -13,7 +13,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import EditIcon from "@mui/icons-material/Edit";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import Footer from "examples/Footer";
+
 import DataTable from "examples/Tables/DataTable";
 import {
   getSubscriptions,
@@ -157,17 +157,17 @@ function Table() {
                   Subscriptions Table
                 </MDTypography>
                 <MDBox display="flex" justifyContent="flex-end" alignItems="center" gap={1}>
-                  <Button
-                    variant="contained"
-                    color="primary"
+                  <MDButton
+                    variant="gradient"
+                    color="info"
                     onClick={handleExportModalOpen}
                     size="small"
                   >
                     Export
-                  </Button>
-                  <Button variant="contained" color="primary" onClick={handleAdd} size="small">
+                  </MDButton>
+                  <MDButton variant="gradient" color="info" onClick={handleAdd} size="small">
                     Add New
-                  </Button>
+                  </MDButton>
                 </MDBox>
               </MDBox>
               <MDBox
@@ -225,7 +225,7 @@ function Table() {
           </Grid>
         </Grid>
       </MDBox>
-      <Footer />
+
       <SubscriptionFormModal
         open={modalOpen}
         onClose={handleModalClose}

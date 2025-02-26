@@ -2,7 +2,8 @@
 import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
-const API_BASE_URL = "https://exaaadoo-72a1f8b32d36.herokuapp.com";
+//const API_BASE_URL = "https://exaaadoo-72a1f8b32d36.herokuapp.com";
+const API_BASE_URL = "http://localhost:5000";
 
 // دالة للحصول على هيدر التفويض (Authorization) للمشرف
 const getAuthHeaders = () => {
@@ -217,3 +218,115 @@ export const addSubscription = async (data) => {
     throw error;
   }
 };
+
+/**
+ * تسجيل الدخول باستخدام Google:
+ * يُرسل id_token إلى الخادم للحصول على access_token و refresh_token.
+ */
+export const loginWithGoogle = (idToken) => {
+  return axios.post(`${API_BASE_URL}/api/auth/login`, { id_token: idToken });
+};
+
+/**
+ * دالة لحفظ access_token في Local Storage وتعيينه في axios.
+ */
+export const setAuthToken = (token) => {
+  localStorage.setItem("access_token", token);
+  axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+};
+
+/**
+ * استرجاع access_token من Local Storage.
+ */
+export const getAuthToken = () => localStorage.getItem("access_token");
+
+/**
+ * استرجاع refresh_token من Local Storage.
+ */
+export const getRefreshToken = () => localStorage.getItem("refresh_token");
+
+/**
+ * إزالة التوكنات من Local Storage ومن إعدادات axios.
+ */
+export const removeAuthToken = () => {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  delete axios.defaults.headers.common["Authorization"];
+};
+
+/**
+ * دوال إدارة المستخدمين:
+ * يتم استخدام apiClient بحيث تمر كل الطلبات عبر الـ interceptors.
+ */
+export const getUsers = () => {
+  return apiClient.get("/api/admin/users");
+};
+
+export const deleteUser = (email) => {
+  return apiClient.delete("/api/admin/remove_user", { data: { email } });
+};
+
+export const addUser = (email, displayName, role) => {
+  const endpoint = role === "owner" ? "add_owner" : "add_admin";
+  return apiClient.post(`/api/admin/${endpoint}`, { email, display_name: displayName });
+};
+
+/**
+ * دالة تجديد access_token باستخدام refresh_token.
+ */
+export const refreshAuthToken = async () => {
+  try {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      throw new Error("No refresh token available");
+    }
+    const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
+      refresh_token: refreshToken,
+    });
+    const newAccessToken = response.data.access_token;
+    localStorage.setItem("access_token", newAccessToken);
+    axios.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+    return newAccessToken;
+  } catch (error) {
+    console.error("Failed to refresh token", error);
+    removeAuthToken();
+    window.location.href = "/authentication/sign-in";
+    return null;
+  }
+};
+
+/**
+ * إنشاء axios instance مع Interceptors لتجديد access_token تلقائيًا.
+ */
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+// Request interceptor: يضيف Authorization header قبل إرسال الطلب
+apiClient.interceptors.request.use(async (config) => {
+  let token = getAuthToken();
+  if (!token) {
+    token = await refreshAuthToken();
+  }
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Response interceptor: إذا حصلنا على 401 نحاول تجديد التوكن وإعادة إرسال الطلب
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const newToken = await refreshAuthToken();
+      if (newToken) {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(originalRequest);
+      }
+    }
+    return Promise.reject(error);
+  }
+);

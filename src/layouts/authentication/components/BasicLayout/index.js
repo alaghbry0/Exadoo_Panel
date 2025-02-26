@@ -27,7 +27,6 @@ import DefaultNavbar from "examples/Navbars/DefaultNavbar";
 import PageLayout from "examples/LayoutContainers/PageLayout";
 
 // Authentication pages components
-import Footer from "layouts/authentication/components/Footer";
 
 function BasicLayout({ image, children }) {
   return (
@@ -63,7 +62,6 @@ function BasicLayout({ image, children }) {
           </Grid>
         </Grid>
       </MDBox>
-      <Footer light />
     </PageLayout>
   );
 }

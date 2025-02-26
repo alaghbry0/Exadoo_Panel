@@ -1,16 +1,12 @@
+// layouts/tables/components/SubscriptionFormModal.jsx
 import React, { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  MenuItem,
-  Grid,
-} from "@mui/material";
+import { Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Grid } from "@mui/material";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import MDInput from "components/MDInput";
+import MDButton from "components/MDButton";
+import MDTypography from "components/MDTypography";
+import MDBox from "components/MDBox";
 
 const SubscriptionFormModal = ({
   open,
@@ -81,75 +77,67 @@ const SubscriptionFormModal = ({
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-        <DialogTitle variant="h5" fontWeight="bold" color="dark">
-          {isEdit ? "Edit Subscription" : "Add New Subscription"}
+        <DialogTitle>
+          <MDTypography variant="h5" fontWeight="bold" color="dark">
+            {isEdit ? "Edit Subscription" : "Add New Subscription"}
+          </MDTypography>
         </DialogTitle>
         <DialogContent sx={{ p: 3 }}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
-              <TextField
-                margin="dense"
+              <MDInput
                 label="Telegram ID"
                 name="telegram_id"
                 type="text"
                 fullWidth
-                variant="outlined"
                 value={formData.telegram_id}
                 onChange={handleChange}
                 required
               />
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                margin="dense"
+              <MDInput
                 label="Full Name"
                 name="full_name"
                 type="text"
                 fullWidth
-                variant="outlined"
                 value={formData.full_name}
                 onChange={handleChange}
                 required
               />
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                margin="dense"
+              <MDInput
                 label="Username"
                 name="username"
                 type="text"
                 fullWidth
-                variant="outlined"
                 value={formData.username}
                 onChange={handleChange}
                 required
               />
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                margin="dense"
+              <MDInput
+                select
                 label="Subscription Type"
                 name="subscription_type_id"
-                select
                 fullWidth
-                variant="outlined"
                 value={formData.subscription_type_id}
                 onChange={handleChange}
                 required
                 SelectProps={{
-                  // Add SelectProps to style the select field
                   MenuProps: {
                     MenuListProps: {
                       sx: {
-                        paddingTop: "4px", // Reduce padding at the top of the list
-                        paddingBottom: "4px", // Reduce padding at the bottom of the list
+                        paddingTop: "4px",
+                        paddingBottom: "4px",
                       },
                     },
                   },
                 }}
                 InputLabelProps={{
-                  // Add InputLabelProps to style the label
-                  style: { fontWeight: "bold" }, // Make the label font weight bold
+                  style: { fontWeight: "bold" },
                 }}
               >
                 <MenuItem value="" disabled>
@@ -159,32 +147,30 @@ const SubscriptionFormModal = ({
                   <MenuItem
                     key={type.id}
                     value={type.id}
-                    sx={{ paddingTop: "8px", paddingBottom: "8px" }} // Increase padding for menu items
+                    sx={{ paddingTop: "8px", paddingBottom: "8px" }}
                   >
                     {type.name}
                   </MenuItem>
                 ))}
-              </TextField>
+              </MDInput>
             </Grid>
             <Grid item xs={12}>
               <DatePicker
                 label="Expiry Date"
                 value={formData.expiry_date}
                 onChange={handleDateChange}
-                renderInput={(params) => (
-                  <TextField margin="dense" fullWidth variant="outlined" required {...params} />
-                )}
+                renderInput={(params) => <MDInput fullWidth {...params} />}
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 2 }}>
-          <Button onClick={onClose} color="secondary">
+          <MDButton onClick={onClose} color="secondary" variant="text">
             Cancel
-          </Button>
-          <Button onClick={handleSubmit} color="primary" variant="contained">
+          </MDButton>
+          <MDButton onClick={handleSubmit} color="primary" variant="gradient">
             {isEdit ? "Update" : "Add"}
-          </Button>
+          </MDButton>
         </DialogActions>
       </Dialog>
     </LocalizationProvider>

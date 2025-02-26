@@ -4,13 +4,13 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import MDBox from "components/MDBox";
+import MDInput from "components/MDInput";
+import MDButton from "components/MDButton";
+import MDTypography from "components/MDTypography";
 import { updateSubscriptionType } from "services/api";
-// استيراد المكون الجديد لإدخال الميزات
 import FeaturesInput from "./FeaturesInput";
 
 function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpdated }) {
@@ -18,25 +18,22 @@ function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpda
   const [channelId, setChannelId] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  // استخدم مصفوفة لميزات الاشتراك
   const [features, setFeatures] = useState([]);
   const [usp, setUsp] = useState("");
   const [isActive, setIsActive] = useState(true);
 
-  // تعبئة الحقول بالبيانات الحالية عند فتح النموذج
   useEffect(() => {
     if (subscriptionType) {
       setName(subscriptionType.name || "");
       setChannelId(subscriptionType.channel_id || "");
       setDescription(subscriptionType.description || "");
       setImageUrl(subscriptionType.image_url || "");
-      // فحص إذا كانت features مصفوفة أو سلسلة نصية
       if (Array.isArray(subscriptionType.features)) {
-        setFeatures(subscriptionType.features); // تعيين المصفوفة مباشرة
+        setFeatures(subscriptionType.features);
       } else if (typeof subscriptionType.features === "string") {
-        setFeatures(subscriptionType.features.split(",").map((item) => item.trim())); // تقسيم السلسلة النصية إلى مصفوفة
+        setFeatures(subscriptionType.features.split(",").map((item) => item.trim()));
       } else {
-        setFeatures([]); // تعيين مصفوفة فارغة كقيمة افتراضية
+        setFeatures([]);
       }
       setUsp(subscriptionType.usp || "");
       setIsActive(subscriptionType.is_active);
@@ -49,7 +46,7 @@ function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpda
       channel_id: parseInt(channelId, 10),
       description,
       image_url: imageUrl,
-      features, // مصفوفة الميزات الآن
+      features,
       usp,
       is_active: isActive,
     };
@@ -63,47 +60,51 @@ function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpda
   };
 
   return (
-    <Dialog open={open} onClose={onClose}>
-      <DialogTitle>Edit Subscription Type</DialogTitle>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>
+        <MDTypography variant="h5" fontWeight="bold">
+          Edit Subscription Type
+        </MDTypography>
+      </DialogTitle>
       <DialogContent>
         <MDBox component="form" noValidate sx={{ mt: 2 }}>
-          <TextField
-            margin="dense"
+          <MDInput
             label="Type Name"
             fullWidth
             value={name}
             onChange={(e) => setName(e.target.value)}
-          />
-          <TextField
             margin="dense"
+          />
+          <MDInput
             label="Channel ID"
             type="number"
             fullWidth
             value={channelId}
             onChange={(e) => setChannelId(e.target.value)}
-          />
-          <TextField
             margin="dense"
+          />
+          <MDInput
             label="Description"
             fullWidth
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-          />
-          <TextField
             margin="dense"
+          />
+          <MDInput
             label="Image URL"
             fullWidth
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
-          />
-          {/* استخدام FeaturesInput بدلاً من TextField */}
-          <FeaturesInput value={features} onChange={setFeatures} />
-          <TextField
             margin="dense"
+          />
+          {/* استخدام FeaturesInput لإدخال الميزات */}
+          <FeaturesInput value={features} onChange={setFeatures} />
+          <MDInput
             label="USP"
             fullWidth
             value={usp}
             onChange={(e) => setUsp(e.target.value)}
+            margin="dense"
           />
           <FormControlLabel
             control={
@@ -113,15 +114,22 @@ function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpda
                 color="primary"
               />
             }
-            label="Active"
+            label={
+              <MDTypography variant="body2" fontWeight="bold">
+                Active
+              </MDTypography>
+            }
+            sx={{ mt: 1 }}
           />
         </MDBox>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained">
+        <MDButton onClick={onClose} color="secondary" variant="text">
+          Cancel
+        </MDButton>
+        <MDButton onClick={handleSubmit} color="primary" variant="contained">
           Save
-        </Button>
+        </MDButton>
       </DialogActions>
     </Dialog>
   );

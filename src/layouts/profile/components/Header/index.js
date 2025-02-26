@@ -110,7 +110,7 @@ function Header({ children }) {
             <AppBar position="static">
               <Tabs orientation={tabsOrientation} value={tabValue} onChange={handleSetTabValue}>
                 <Tab
-                  label="App"
+                  label="Users"
                   icon={
                     <Icon fontSize="small" sx={{ mt: -0.25 }}>
                       home
@@ -118,7 +118,7 @@ function Header({ children }) {
                   }
                 />
                 <Tab
-                  label="Message"
+                  label="Wallet"
                   icon={
                     <Icon fontSize="small" sx={{ mt: -0.25 }}>
                       email

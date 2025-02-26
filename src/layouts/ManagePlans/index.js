@@ -8,7 +8,7 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import Footer from "examples/Footer";
+
 import { getSubscriptionTypes, createSubscriptionType } from "services/api";
 import SubscriptionTypeCard from "layouts/ManagePlans/components/SubscriptionTypeCard";
 import SubscriptionSettings from "layouts/ManagePlans/components/SubscriptionSettings";
@@ -51,8 +51,8 @@ function ManagePlans() {
           </MDTypography>
 
           <Button
-            variant="contained"
-            color="primary"
+            variant="gradient"
+            color="info"
             startIcon={<AddIcon />}
             onClick={() => setOpenAddTypeModal(true)}
             aria-label="Add new subscription type"
@@ -101,8 +101,6 @@ function ManagePlans() {
           <SubscriptionSettings />
         </MDBox>
       </MDBox>
-
-      <Footer />
 
       {/* Add Subscription Modal */}
       <AddSubscriptionTypeModal

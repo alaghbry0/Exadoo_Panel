@@ -4,15 +4,16 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import MDBox from "components/MDBox";
-import { createSubscriptionType } from "services/api";
+import CssBaseline from "@mui/material/CssBaseline";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import FeaturesInput from "./FeaturesInput";
 import { useTheme } from "@mui/material/styles";
-import CssBaseline from "@mui/material/CssBaseline"; // استيراد CssBaseline
+import MDBox from "components/MDBox";
+import MDInput from "components/MDInput";
+import MDButton from "components/MDButton";
+import MDTypography from "components/MDTypography";
+import { createSubscriptionType } from "services/api";
+import FeaturesInput from "./FeaturesInput";
 
 function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
   const [name, setName] = useState("");
@@ -24,20 +25,18 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
   const [isActive, setIsActive] = useState(true);
   const theme = useTheme();
 
-  // حالات للتحقق من الصحة وعرض رسائل الخطأ
+  // حالات التحقق من الصحة
   const [nameError, setNameError] = useState(false);
   const [channelIdError, setChannelIdError] = useState(false);
   const [descriptionError, setDescriptionError] = useState(false);
 
   const handleSubmit = async () => {
-    // إعادة تعيين حالات الخطأ عند كل محاولة إرسال
+    // إعادة تعيين حالات الخطأ
     setNameError(false);
     setChannelIdError(false);
     setDescriptionError(false);
 
     let isValid = true;
-
-    // التحقق من الحقول المطلوبة
     if (!name) {
       setNameError(true);
       isValid = false;
@@ -51,10 +50,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
       isValid = false;
     }
 
-    if (!isValid) {
-      // إذا كان هناك أي حقل فارغ، لا تقم بالإرسال واعرض رسائل الخطأ
-      return;
-    }
+    if (!isValid) return;
 
     const data = {
       name,
@@ -65,6 +61,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
       usp,
       is_active: isActive,
     };
+
     try {
       const newType = await createSubscriptionType(data);
       onTypeAdded(newType);
@@ -84,70 +81,72 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
   };
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle sx={{ color: theme.palette.text.primary }}>
-        Add New Subscription Type
+        <MDTypography variant="h5" fontWeight="bold">
+          Add New Subscription Type
+        </MDTypography>
       </DialogTitle>
       <DialogContent
         sx={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary }}
       >
-        <CssBaseline /> {/* إضافة CssBaseline هنا */}
+        <CssBaseline />
         <MDBox component="form" noValidate sx={{ mt: 2 }}>
-          <TextField
-            margin="dense"
+          <MDInput
             label="Type Name *"
             fullWidth
             required
             value={name}
             error={nameError}
-            helperText={nameError ? "Type Name is required" : null}
+            helperText={nameError ? "Type Name is required" : ""}
             onChange={(e) => setName(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }} // لون النص لحقل الإدخال
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }} // لون العنوان لحقل الإدخال
-          />
-          <TextField
+            InputProps={{ style: { color: theme.palette.text.primary } }}
+            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
             margin="dense"
+          />
+          <MDInput
             label="Channel ID *"
             type="number"
             fullWidth
             required
             value={channelId}
             error={channelIdError}
-            helperText={channelIdError ? "Channel ID is required" : null}
+            helperText={channelIdError ? "Channel ID is required" : ""}
             onChange={(e) => setChannelId(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }} // لون النص لحقل الإدخال
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }} // لون العنوان لحقل الإدخال
-          />
-          <TextField
+            InputProps={{ style: { color: theme.palette.text.primary } }}
+            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
             margin="dense"
+          />
+          <MDInput
             label="Description *"
             fullWidth
             required
             value={description}
             error={descriptionError}
-            helperText={descriptionError ? "Description is required" : null}
+            helperText={descriptionError ? "Description is required" : ""}
             onChange={(e) => setDescription(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }} // لون النص لحقل الإدخال
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }} // لون العنوان لحقل الإدخال
-          />
-          <TextField
+            InputProps={{ style: { color: theme.palette.text.primary } }}
+            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
             margin="dense"
+          />
+          <MDInput
             label="Image URL"
             fullWidth
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }} // لون النص لحقل الإدخال
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }} // لون العنوان لحقل الإدخال
+            InputProps={{ style: { color: theme.palette.text.primary } }}
+            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
+            margin="dense"
           />
           <FeaturesInput value={features} onChange={setFeatures} />
-          <TextField
-            margin="dense"
+          <MDInput
             label="USP"
             fullWidth
             value={usp}
             onChange={(e) => setUsp(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }} // لون النص لحقل الإدخال
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }} // لون العنوان لحقل الإدخال
+            InputProps={{ style: { color: theme.palette.text.primary } }}
+            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
+            margin="dense"
           />
           <FormControlLabel
             control={
@@ -157,23 +156,27 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
                 color="primary"
               />
             }
-            label="Active"
-            sx={{ color: theme.palette.text.primary }} // لون النص لـ FormControlLabel
+            label={
+              <MDTypography variant="body2" fontWeight="regular" color="text">
+                Active
+              </MDTypography>
+            }
+            sx={{ color: theme.palette.text.primary, mt: 1 }}
           />
         </MDBox>
       </DialogContent>
       <DialogActions sx={{ backgroundColor: theme.palette.background.paper }}>
-        <Button onClick={onClose} sx={{ color: theme.palette.text.primary }}>
+        <MDButton onClick={onClose} color="secondary" variant="text">
           Cancel
-        </Button>
-        <Button
+        </MDButton>
+        <MDButton
           onClick={handleSubmit}
-          variant="contained"
+          variant="gradient"
           disabled={nameError || channelIdError || descriptionError}
-          sx={{ color: theme.palette.text.primary }}
+          color="primary"
         >
           Add Type
-        </Button>
+        </MDButton>
       </DialogActions>
     </Dialog>
   );

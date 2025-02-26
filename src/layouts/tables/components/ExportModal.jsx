@@ -4,18 +4,17 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import MDBox from "components/MDBox";
-import MDInput from "components/MDInput";
-import Button from "@mui/material/Button";
 import MenuItem from "@mui/material/MenuItem";
-import IconButton from "@mui/material/IconButton";
 import Collapse from "@mui/material/Collapse";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import MDBox from "components/MDBox";
+import MDInput from "components/MDInput";
+import MDButton from "components/MDButton";
+import MDTypography from "components/MDTypography";
 
 const ExportModal = ({ open, onClose, onSubmit, subscriptionTypes = [] }) => {
-  // الحالة الافتراضية تُحدد Subscription Type فارغ، والتواريخ غير محددة، والحالة "all"
   const [filters, setFilters] = useState({
     subscription_type_id: "",
     start_date: null,
@@ -38,7 +37,6 @@ const ExportModal = ({ open, onClose, onSubmit, subscriptionTypes = [] }) => {
   };
 
   const handleExport = () => {
-    // تحويل التواريخ إلى صيغة ISO (YYYY-MM-DD) إذا كانت موجودة
     const exportFilters = {
       subscription_type_id: filters.subscription_type_id,
       active: filters.active,
@@ -51,7 +49,11 @@ const ExportModal = ({ open, onClose, onSubmit, subscriptionTypes = [] }) => {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-        <DialogTitle>Export Subscriptions</DialogTitle>
+        <DialogTitle>
+          <MDTypography variant="h5" color="dark">
+            Export Subscriptions
+          </MDTypography>
+        </DialogTitle>
         <DialogContent>
           <MDBox my={2}>
             <MDInput
@@ -70,7 +72,9 @@ const ExportModal = ({ open, onClose, onSubmit, subscriptionTypes = [] }) => {
           </MDBox>
 
           <MDBox display="flex" alignItems="center" justifyContent="flex-end">
-            <Button
+            <MDButton
+              variant="outlined"
+              color="info"
               onClick={toggleAdvanced}
               endIcon={
                 <ExpandMoreIcon
@@ -82,7 +86,7 @@ const ExportModal = ({ open, onClose, onSubmit, subscriptionTypes = [] }) => {
               }
             >
               Advanced Settings
-            </Button>
+            </MDButton>
           </MDBox>
 
           <Collapse in={advancedOpen}>
@@ -118,12 +122,12 @@ const ExportModal = ({ open, onClose, onSubmit, subscriptionTypes = [] }) => {
           </Collapse>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" color="primary" onClick={handleExport}>
+          <MDButton variant="gradient" color="info" onClick={handleExport}>
             Export
-          </Button>
-          <Button variant="outlined" onClick={onClose}>
+          </MDButton>
+          <MDButton variant="h6" onClick={onClose}>
             Cancel
-          </Button>
+          </MDButton>
         </DialogActions>
       </Dialog>
     </LocalizationProvider>

@@ -6,7 +6,7 @@ import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import Footer from "examples/Footer";
+
 import DataTable from "examples/Tables/DataTable";
 import { getPayments } from "services/api";
 import { format } from "date-fns";
@@ -143,7 +143,6 @@ function PaymentsTable() {
           </Grid>
         </Grid>
       </MDBox>
-      <Footer />
     </DashboardLayout>
   );
 }

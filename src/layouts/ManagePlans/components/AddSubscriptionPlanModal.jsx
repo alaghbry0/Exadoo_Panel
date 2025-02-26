@@ -4,16 +4,16 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import MDBox from "components/MDBox";
-import { createSubscriptionPlan } from "services/api";
+import { styled, useTheme } from "@mui/material/styles";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import { styled } from "@mui/material/styles"; // Import styled for custom styling
-import Typography from "@mui/material/Typography"; // Import Typography for bold label
+import MDBox from "components/MDBox";
+import MDInput from "components/MDInput";
+import MDButton from "components/MDButton";
+import MDTypography from "components/MDTypography";
+import { createSubscriptionPlan } from "services/api";
 
-// Styled Dialog Title for enhanced visual hierarchy
+// Styled components لضبط التنسيق
 const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
   "&.MuiDialogTitle-root": {
     padding: theme.spacing(3),
@@ -24,14 +24,12 @@ const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
   },
 }));
 
-// Styled Dialog Content for improved spacing
 const StyledDialogContent = styled(DialogContent)(({ theme }) => ({
   "&.MuiDialogContent-root": {
     padding: theme.spacing(3),
   },
 }));
 
-// Styled Dialog Actions for better button styling and alignment
 const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
   "&.MuiDialogActions-root": {
     padding: theme.spacing(2, 3, 3, 3),
@@ -45,6 +43,7 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
   const [durationDays, setDurationDays] = useState("");
   const [telegramStarsPrice, setTelegramStarsPrice] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const theme = useTheme();
 
   const handleSubmit = async () => {
     const data = {
@@ -59,59 +58,65 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
       const newPlan = await createSubscriptionPlan(data);
       onPlanAdded(newPlan);
       onClose();
+      // إعادة تعيين الحقول بعد الإضافة الناجحة
       setName("");
       setPrice("");
       setDurationDays("");
       setTelegramStarsPrice("");
-      setIsActive(true); // Reset isActive to true for next add operation - important fix!
+      setIsActive(true);
     } catch (error) {
       console.error("Error creating subscription plan", error);
+      alert("Failed to add new subscription plan. Please check the form and try again.");
     }
   };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <StyledDialogTitle>Add New Subscription Plan {/* English Dialog Title */}</StyledDialogTitle>
+      <StyledDialogTitle>
+        <MDTypography variant="h5" fontWeight="bold">
+          Add New Subscription Plan
+        </MDTypography>
+      </StyledDialogTitle>
       <StyledDialogContent>
         <MDBox component="form" noValidate sx={{ mt: 2 }}>
-          <TextField
-            margin="dense"
-            label="Plan Name" // English Label
+          <MDInput
+            label="Plan Name"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label
-          />
-          <TextField
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
             margin="dense"
-            label="Price" // English Label
+          />
+          <MDInput
+            label="Price"
             type="number"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label
-          />
-          <TextField
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
             margin="dense"
-            label="Duration (Days)" // English Label
+          />
+          <MDInput
+            label="Duration (Days)"
             type="number"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={durationDays}
             onChange={(e) => setDurationDays(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label
-          />
-          <TextField
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
             margin="dense"
-            label="Telegram Stars Price" // English Label
+          />
+          <MDInput
+            label="Telegram Stars Price"
             type="number"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={telegramStarsPrice}
             onChange={(e) => setTelegramStarsPrice(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
+            margin="dense"
           />
           <FormControlLabel
             control={
@@ -121,18 +126,22 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
                 color="primary"
               />
             }
-            label={<Typography fontWeight="bold">Active</Typography>} // Bold label for checkbox
-            sx={{ mt: 2 }} // Added margin top for spacing
+            label={
+              <MDTypography variant="body2" fontWeight="bold">
+                Active
+              </MDTypography>
+            }
+            sx={{ mt: 2, color: theme.palette.text.primary }}
           />
         </MDBox>
       </StyledDialogContent>
       <StyledDialogActions>
-        <Button onClick={onClose} color="secondary" variant="outlined">
-          Cancel {/* English Cancel Button */}
-        </Button>
-        <Button onClick={handleSubmit} color="primary" variant="contained">
-          Add Plan {/* English Add Plan Button */}
-        </Button>
+        <MDButton onClick={onClose} color="secondary" variant="outlined">
+          Cancel
+        </MDButton>
+        <MDButton onClick={handleSubmit} color="primary" variant="contained">
+          Add Plan
+        </MDButton>
       </StyledDialogActions>
     </Dialog>
   );

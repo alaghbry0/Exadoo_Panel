@@ -1,44 +1,39 @@
-// src/layouts/managePlans/components/EditSubscriptionPlanModal.jsx
+// src/layouts/ManagePlans/components/EditSubscriptionPlanModal.jsx
 import React, { useState, useEffect } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import MDBox from "components/MDBox";
-import { updateSubscriptionPlan } from "services/api";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import { styled } from "@mui/material/styles"; // Corrected quotes for import
-import Typography from "@mui/material/Typography"; // Imported Typography - Fixes react/jsx-no-undef
+import { styled } from "@mui/material/styles";
+import MDBox from "components/MDBox";
+import MDInput from "components/MDInput";
+import MDButton from "components/MDButton";
+import MDTypography from "components/MDTypography";
+import { updateSubscriptionPlan } from "services/api";
 
-// Styled Dialog Title for enhanced visual hierarchy
+// Styled components لتحسين التنسيق
 const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
   "&.MuiDialogTitle-root": {
-    // Corrected quotes
     padding: theme.spacing(3),
-    textAlign: "center", // Corrected quotes
-    fontWeight: "bold", // Corrected quotes
-    fontSize: "1.5rem", // Corrected quotes
+    textAlign: "center",
+    fontWeight: "bold",
+    fontSize: "1.5rem",
     color: theme.palette.text.primary,
   },
 }));
 
-// Styled Dialog Content for improved spacing
 const StyledDialogContent = styled(DialogContent)(({ theme }) => ({
   "&.MuiDialogContent-root": {
-    // Corrected quotes
     padding: theme.spacing(3),
   },
 }));
 
-// Styled Dialog Actions for better button styling and alignment
 const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
   "&.MuiDialogActions-root": {
-    // Corrected quotes
     padding: theme.spacing(2, 3, 3, 3),
-    justifyContent: "center", // Corrected quotes
+    justifyContent: "center",
   },
 }));
 
@@ -78,47 +73,51 @@ function EditSubscriptionPlanModal({ open, onClose, plan, onPlanUpdated }) {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <StyledDialogTitle>Edit Subscription Plan {/* English Dialog Title */}</StyledDialogTitle>
+      <StyledDialogTitle>
+        <MDTypography variant="h5" fontWeight="bold">
+          Edit Subscription Plan
+        </MDTypography>
+      </StyledDialogTitle>
       <StyledDialogContent>
         <MDBox component="form" noValidate sx={{ mt: 2 }}>
-          <TextField
-            margin="dense"
-            label="Plan Name" // English Label
+          <MDInput
+            label="Plan Name"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label - Corrected quotes
-          />
-          <TextField
             margin="dense"
-            label="Price" // English Label
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
+          />
+          <MDInput
+            label="Price"
             type="number"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label - Corrected quotes
-          />
-          <TextField
             margin="dense"
-            label="Duration (Days)" // English Label
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
+          />
+          <MDInput
+            label="Duration (Days)"
             type="number"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={durationDays}
             onChange={(e) => setDurationDays(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label - Corrected quotes
-          />
-          <TextField
             margin="dense"
-            label="Telegram Stars Price" // English Label
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
+          />
+          <MDInput
+            label="Telegram Stars Price"
             type="number"
             fullWidth
-            variant="outlined" // Added outlined variant for consistency
+            variant="outlined"
             value={telegramStarsPrice}
             onChange={(e) => setTelegramStarsPrice(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }} // Bold label - Corrected quotes
+            margin="dense"
+            InputLabelProps={{ style: { fontWeight: "bold" } }}
           />
           <FormControlLabel
             control={
@@ -128,18 +127,22 @@ function EditSubscriptionPlanModal({ open, onClose, plan, onPlanUpdated }) {
                 color="primary"
               />
             }
-            label={<Typography fontWeight="bold">Active</Typography>} // Bold label for checkbox - Typography imported
-            sx={{ mt: 2 }} // Added margin top for spacing
+            label={
+              <MDTypography variant="body2" fontWeight="bold">
+                Active
+              </MDTypography>
+            }
+            sx={{ mt: 2 }}
           />
         </MDBox>
       </StyledDialogContent>
       <StyledDialogActions>
-        <Button onClick={onClose} color="secondary" variant="outlined">
-          Cancel {/* English Cancel Button */}
-        </Button>
-        <Button onClick={handleSubmit} color="primary" variant="contained">
-          Save Changes {/* English Save Changes Button */}
-        </Button>
+        <MDButton onClick={onClose} color="secondary" variant="outlined">
+          Cancel
+        </MDButton>
+        <MDButton onClick={handleSubmit} color="primary" variant="contained">
+          Save Changes
+        </MDButton>
       </StyledDialogActions>
     </Dialog>
   );
