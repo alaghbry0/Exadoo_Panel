@@ -1,18 +1,4 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.2.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2023 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
-
+// profile/components/Header/index.js
 import { useState, useEffect } from "react";
 
 // prop-types is a library for typechecking of props.
@@ -38,7 +24,8 @@ import breakpoints from "assets/theme/base/breakpoints";
 import burceMars from "assets/images/bruce-mars.jpg";
 import backgroundImage from "assets/images/bg-profile.jpeg";
 
-function Header({ children }) {
+function Header({ children, setActiveTab }) {
+  // استلام setActiveTab كمِيزة
   const [tabsOrientation, setTabsOrientation] = useState("horizontal");
   const [tabValue, setTabValue] = useState(0);
 
@@ -50,7 +37,7 @@ function Header({ children }) {
         : setTabsOrientation("horizontal");
     }
 
-    /** 
+    /**
      The event listener that's calling the handleTabsOrientation function when resizing the window.
     */
     window.addEventListener("resize", handleTabsOrientation);
@@ -62,7 +49,16 @@ function Header({ children }) {
     return () => window.removeEventListener("resize", handleTabsOrientation);
   }, [tabsOrientation]);
 
-  const handleSetTabValue = (event, newValue) => setTabValue(newValue);
+  const handleSetTabValue = (event, newValue) => {
+    setTabValue(newValue);
+    if (newValue === 0) {
+      setActiveTab("users"); // تعيين التبويب النشط إلى 'users'
+    } else if (newValue === 1) {
+      setActiveTab("wallet"); // تعيين التبويب النشط إلى 'wallet'
+    } else if (newValue === 2) {
+      setActiveTab("settings"); // تعيين التبويب النشط إلى 'settings'
+    }
+  };
 
   return (
     <MDBox position="relative" mb={5}>
@@ -151,6 +147,7 @@ Header.defaultProps = {
 // Typechecking props for the Header
 Header.propTypes = {
   children: PropTypes.node,
+  setActiveTab: PropTypes.func.isRequired, // إضافة نوع setActiveTab في propTypes
 };
 
 export default Header;

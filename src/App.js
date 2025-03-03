@@ -113,7 +113,13 @@ export default function App() {
           <Route
             key={route.key}
             path={route.route}
-            element={<PrivateRoute>{route.component}</PrivateRoute>}
+            element={
+              <PrivateRoute requiredRole={route.role}>
+                {" "}
+                {/* تم التعديل: تمرير role prop */}
+                {route.component}
+              </PrivateRoute>
+            }
           />
         ))}
 

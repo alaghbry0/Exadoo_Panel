@@ -5,13 +5,12 @@ console.log(process.env.NEXT_PUBLIC_BACK_URL);
 //const API_BASE_URL = "https://exaaadoo-72a1f8b32d36.herokuapp.com";
 const API_BASE_URL = "http://localhost:5000";
 
-// دالة للحصول على هيدر التفويض (Authorization) للمشرف
 const getAuthHeaders = () => {
-  // يمكن أن يكون token محفوظًا في localStorage أو أي طريقة أخرى تعتمدها
-  const token = localStorage.getItem("adminToken") || process.env.REACT_APP_ADMIN_TOKEN;
-
+  const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
+  const authHeader = `Bearer ${token}`;
+  console.log("Full Authorization Header:", authHeader); // ✅ تسجيل الترويسة بالكامل
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: authHeader,
   };
 };
 
@@ -41,7 +40,7 @@ export const getSubscriptionType = async (typeId) => {
   }
 };
 
-// إضافة نوع اشتراك جديد
+// انشاء اشتراك جديد
 export const createSubscriptionType = async (data) => {
   try {
     const response = await axios.post(`${API_BASE_URL}/api/admin/subscription-types`, data, {
@@ -221,7 +220,7 @@ export const addSubscription = async (data) => {
 
 /**
  * تسجيل الدخول باستخدام Google:
- * يُرسل id_token إلى الخادم للحصول على access_token و refresh_token.
+ * يُرسل id_token إلى الخادم للحصول على access_token و role.
  */
 export const loginWithGoogle = (idToken) => {
   return axios.post(`${API_BASE_URL}/api/auth/login`, { id_token: idToken });
@@ -241,16 +240,11 @@ export const setAuthToken = (token) => {
 export const getAuthToken = () => localStorage.getItem("access_token");
 
 /**
- * استرجاع refresh_token من Local Storage.
- */
-export const getRefreshToken = () => localStorage.getItem("refresh_token");
-
-/**
  * إزالة التوكنات من Local Storage ومن إعدادات axios.
+ * تم التعديل: لحذف access_token فقط. Refresh token يتم التعامل معه كـ HTTP-only Cookie.
  */
 export const removeAuthToken = () => {
   localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
   delete axios.defaults.headers.common["Authorization"];
 };
 
@@ -272,17 +266,16 @@ export const addUser = (email, displayName, role) => {
 };
 
 /**
- * دالة تجديد access_token باستخدام refresh_token.
+ * دالة تجديد access_token باستخدام refresh_token (المخزن كـ HTTP-only Cookie).
+ * تم التعديل:  إرسال طلب فارغ لـ /api/auth/refresh.
  */
 export const refreshAuthToken = async () => {
   try {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) {
-      throw new Error("No refresh token available");
-    }
-    const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-      refresh_token: refreshToken,
-    });
+    const response = await axios.post(
+      `${API_BASE_URL}/api/auth/refresh`,
+      {},
+      { withCredentials: true }
+    ); // تم التعديل: طلب POST فارغ و withCredentials: true
     const newAccessToken = response.data.access_token;
     localStorage.setItem("access_token", newAccessToken);
     axios.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
@@ -297,9 +290,11 @@ export const refreshAuthToken = async () => {
 
 /**
  * إنشاء axios instance مع Interceptors لتجديد access_token تلقائيًا.
+ * تم التعديل: إضافة withCredentials: true للسماح بملفات تعريف الارتباط.
  */
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true, // تم الإضافة: للسماح بإرسال واستقبال ملفات تعريف الارتباط
 });
 
 // Request interceptor: يضيف Authorization header قبل إرسال الطلب
@@ -330,3 +325,12 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+
+export const getWalletAddress = () => {
+  return axios.get(`${API_BASE_URL}/api/admin/wallet`, { headers: getAuthHeaders() });
+};
+
+export const updateWalletAddress = (walletAddress) => {
+  return axios.post(`${API_BASE_URL}/api/admin/wallet`, { wallet_address: walletAddress }, { headers: getAuthHeaders() });
+};

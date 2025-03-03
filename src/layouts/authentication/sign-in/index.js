@@ -17,9 +17,13 @@ function Basic() {
     try {
       const res = await loginWithGoogle(credentialResponse.credential);
       console.log("✅ Server response:", res.data);
-      const { access_token, refresh_token, role } = res.data;
-      localStorage.setItem("refresh_token", refresh_token);
+      // ✅ تم التعديل: نتوقع فقط access_token و role في الاستجابة
+      const { access_token, role } = res.data;
+      // ❌ تم الحذف: لم نعد نخزن refresh_token في Local Storage
+      // localStorage.setItem("refresh_token", refresh_token);
       setAuthToken(access_token);
+      // ✅ التعديل الهام: تخزين role المستخدم في Local Storage
+      localStorage.setItem("role", role); // تخزين role المستخدم
       navigate("/dashboard");
     } catch (error) {
       console.error("❌ Error during Google login:", error);

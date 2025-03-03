@@ -22,6 +22,10 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 import Header from "layouts/profile/components/Header";
 
+// استيراد الأقسام الجديدة
+import WalletSettingsSection from "layouts/profile/components/WalletSettingsSection";
+import ReminderSettingsSection from "layouts/profile/components/ReminderSettingsSection";
+
 // استيراد دوال API
 import { getUsers, deleteUser, addUser } from "services/api";
 
@@ -154,14 +158,30 @@ function UserManagementSection() {
 }
 
 function Overview() {
+  // إضافة حالة التبويب النشط هنا
+  const [activeTab, setActiveTab] = useState("users"); // القيمة الافتراضية هي 'users'
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox mb={2} />
-      {/* الجزء العلوي من الصفحة يعرض بيانات الملف الشخصي الأساسية مثل الصورة والخلفية والاسم */}
-      <Header />
-      {/* قسم إدارة المستخدمين */}
-      <UserManagementSection />
+      {/* تمرير دالة setActiveTab إلى Header */}
+      <Header setActiveTab={setActiveTab} />
+      <MDBox>
+        {/* استخدام switch لعرض القسم المناسب بناءً على activeTab */}
+        {(() => {
+          switch (activeTab) {
+            case "users":
+              return <UserManagementSection />;
+            case "wallet":
+              return <WalletSettingsSection />;
+            case "settings":
+              return <ReminderSettingsSection />;
+            default:
+              return <UserManagementSection />; // في حالة وجود خطأ، يتم عرض قسم المستخدمين كافتراضي
+          }
+        })()}
+      </MDBox>
       <Footer />
     </DashboardLayout>
   );
