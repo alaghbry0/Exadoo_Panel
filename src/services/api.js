@@ -326,11 +326,14 @@ apiClient.interceptors.response.use(
   }
 );
 
-
 export const getWalletAddress = () => {
   return axios.get(`${API_BASE_URL}/api/admin/wallet`, { headers: getAuthHeaders() });
 };
 
 export const updateWalletAddress = (walletAddress) => {
-  return axios.post(`${API_BASE_URL}/api/admin/wallet`, { wallet_address: walletAddress }, { headers: getAuthHeaders() });
+  return axios.post(
+    `${API_BASE_URL}/api/admin/wallet`,
+    { wallet_address: walletAddress },
+    { headers: getAuthHeaders() }
+  );
 };
