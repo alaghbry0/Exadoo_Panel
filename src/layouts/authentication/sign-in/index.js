@@ -49,20 +49,17 @@ function Basic() {
           p={2}
           mb={1}
           textAlign="center"
-        >
-
-        </MDBox>
+        ></MDBox>
         <MDBox pt={4} pb={3} px={3} textAlign="center">
-  <GoogleLogin
-    onSuccess={handleGoogleSuccess}
-    onError={handleGoogleFailure}
-    useOneTap
-    prompt="select_account"
-    context="signin"
-    is_fedcm_supported={false}
-  />
-</MDBox>
-
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleFailure}
+            useOneTap
+            prompt="select_account"
+            context="signin"
+            is_fedcm_supported={false}
+          />
+        </MDBox>
       </BasicLayout>
     </GoogleOAuthProvider>
   );

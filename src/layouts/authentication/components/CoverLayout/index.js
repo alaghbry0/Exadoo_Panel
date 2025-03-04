@@ -35,8 +35,8 @@ function CoverLayout({ coverHeight, image, children }) {
       <DefaultNavbar
         action={{
           type: "external",
-          route: "https://creative-tim.com/product/material-dashboard-react",
-          label: "free download",
+          route: "https://exaado.com",
+          label: "Exaado Website",
         }}
         transparent
         light
