@@ -16,18 +16,13 @@ import FeaturesInput from "./FeaturesInput";
 function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpdated }) {
   const [name, setName] = useState("");
   const [channelId, setChannelId] = useState("");
-  const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [features, setFeatures] = useState([]);
-  const [usp, setUsp] = useState("");
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
     if (subscriptionType) {
       setName(subscriptionType.name || "");
       setChannelId(subscriptionType.channel_id || "");
-      setDescription(subscriptionType.description || "");
-      setImageUrl(subscriptionType.image_url || "");
       if (Array.isArray(subscriptionType.features)) {
         setFeatures(subscriptionType.features);
       } else if (typeof subscriptionType.features === "string") {
@@ -35,7 +30,6 @@ function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpda
       } else {
         setFeatures([]);
       }
-      setUsp(subscriptionType.usp || "");
       setIsActive(subscriptionType.is_active);
     }
   }, [subscriptionType]);
@@ -44,10 +38,7 @@ function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpda
     const data = {
       name,
       channel_id: parseInt(channelId, 10),
-      description,
-      image_url: imageUrl,
       features,
-      usp,
       is_active: isActive,
     };
     try {
@@ -83,29 +74,8 @@ function EditSubscriptionTypeModal({ open, onClose, subscriptionType, onTypeUpda
             onChange={(e) => setChannelId(e.target.value)}
             margin="dense"
           />
-          <MDInput
-            label="Description"
-            fullWidth
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            margin="dense"
-          />
-          <MDInput
-            label="Image URL"
-            fullWidth
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            margin="dense"
-          />
           {/* استخدام FeaturesInput لإدخال الميزات */}
           <FeaturesInput value={features} onChange={setFeatures} />
-          <MDInput
-            label="USP"
-            fullWidth
-            value={usp}
-            onChange={(e) => setUsp(e.target.value)}
-            margin="dense"
-          />
           <FormControlLabel
             control={
               <Checkbox

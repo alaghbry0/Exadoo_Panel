@@ -10,7 +10,7 @@ import Grid from "@mui/material/Grid";
 
 function ReminderSettingsSection() {
   const [firstReminderHours, setFirstReminderHours] = useState(24); // قيمة افتراضية للتذكير الأول (24 ساعة)
-  const [secondReminderHours, setSecondReminderHours] = useState(48); // قيمة افتراضية للتذكير الثاني (48 ساعة)
+  const [secondReminderHours, setSecondReminderHours] = useState(72); // قيمة افتراضية للتذكير الثاني (72 ساعة)
 
   const handleSaveReminderSettings = () => {
     // هنا يمكنك إضافة كود لحفظ إعدادات التذكيرات الجديدة

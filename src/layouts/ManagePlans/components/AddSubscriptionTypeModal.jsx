@@ -18,23 +18,18 @@ import FeaturesInput from "./FeaturesInput";
 function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
   const [name, setName] = useState("");
   const [channelId, setChannelId] = useState("");
-  const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [features, setFeatures] = useState();
-  const [usp, setUsp] = useState("");
   const [isActive, setIsActive] = useState(true);
   const theme = useTheme();
 
   // حالات التحقق من الصحة
   const [nameError, setNameError] = useState(false);
   const [channelIdError, setChannelIdError] = useState(false);
-  const [descriptionError, setDescriptionError] = useState(false);
 
   const handleSubmit = async () => {
     // إعادة تعيين حالات الخطأ
     setNameError(false);
     setChannelIdError(false);
-    setDescriptionError(false);
 
     let isValid = true;
     if (!name) {
@@ -45,20 +40,12 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
       setChannelIdError(true);
       isValid = false;
     }
-    if (!description) {
-      setDescriptionError(true);
-      isValid = false;
-    }
-
     if (!isValid) return;
 
     const data = {
       name,
       channel_id: parseInt(channelId, 10),
-      description,
-      image_url: imageUrl,
       features,
-      usp,
       is_active: isActive,
     };
 
@@ -69,10 +56,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
       // إعادة تعيين الحقول بعد الإضافة الناجحة
       setName("");
       setChannelId("");
-      setDescription("");
-      setImageUrl("");
       setFeatures();
-      setUsp("");
       setIsActive(true);
     } catch (error) {
       console.error("Error creating subscription type", error);
@@ -117,37 +101,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
             InputLabelProps={{ style: { color: theme.palette.text.primary } }}
             margin="dense"
           />
-          <MDInput
-            label="Description *"
-            fullWidth
-            required
-            value={description}
-            error={descriptionError}
-            helperText={descriptionError ? "Description is required" : ""}
-            onChange={(e) => setDescription(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }}
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
-            margin="dense"
-          />
-          <MDInput
-            label="Image URL"
-            fullWidth
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }}
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
-            margin="dense"
-          />
           <FeaturesInput value={features} onChange={setFeatures} />
-          <MDInput
-            label="USP"
-            fullWidth
-            value={usp}
-            onChange={(e) => setUsp(e.target.value)}
-            InputProps={{ style: { color: theme.palette.text.primary } }}
-            InputLabelProps={{ style: { color: theme.palette.text.primary } }}
-            margin="dense"
-          />
           <FormControlLabel
             control={
               <Checkbox
@@ -172,7 +126,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
         <MDButton
           onClick={handleSubmit}
           variant="gradient"
-          disabled={nameError || channelIdError || descriptionError}
+          disabled={nameError || channelIdError}
           color="primary"
         >
           Add Type

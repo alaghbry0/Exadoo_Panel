@@ -43,7 +43,7 @@ function UserManagementSection() {
       setUsers(res.data.users);
     } catch (error) {
       console.error("Error fetching users", error);
-      alert("فشل جلب قائمة المستخدمين");
+      alert("عذرا, لا يسمح بفتح هذه الاعدادات سوا للمالك.");
     }
   };
 
