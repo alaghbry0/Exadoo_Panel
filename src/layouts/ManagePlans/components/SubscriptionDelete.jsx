@@ -7,8 +7,6 @@ import Icon from "@mui/material/Icon";
 import { styled } from "@mui/material/styles";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-import MDBox from "components/MDBox";
-
 // Styled components لتحسين تنسيق العناوين والمحتوى والإجراءات
 const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
   "&.MuiDialogTitle-root": {
