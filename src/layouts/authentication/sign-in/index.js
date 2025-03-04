@@ -50,20 +50,19 @@ function Basic() {
           mb={1}
           textAlign="center"
         >
-          <MDTypography variant="h4" fontWeight="medium" color="white" mt={1}>
-            تسجيل الدخول
-          </MDTypography>
+
         </MDBox>
         <MDBox pt={4} pb={3} px={3} textAlign="center">
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={handleGoogleFailure}
-            useOneTap
-            prompt="select_account"
-            context="signin"
-            is_fedcm_supported={false}
-          />
-        </MDBox>
+  <GoogleLogin
+    onSuccess={handleGoogleSuccess}
+    onError={handleGoogleFailure}
+    useOneTap
+    prompt="select_account"
+    context="signin"
+    is_fedcm_supported={false}
+  />
+</MDBox>
+
       </BasicLayout>
     </GoogleOAuthProvider>
   );
