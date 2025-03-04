@@ -19,7 +19,7 @@ import brandWhite from "assets/images/logo-ct.png";
 import brandDark from "assets/images/logo-ct-dark.png";
 import PrivateRoute from "./PrivateRoute";
 import SignIn from "layouts/authentication/sign-in";
-import SignUp from "layouts/authentication/sign-up";
+
 
 export default function App() {
   const [controller, dispatch] = useMaterialUIController();
@@ -106,7 +106,7 @@ export default function App() {
       <Routes>
         {/* الصفحات العامة */}
         <Route path="/authentication/sign-in" element={<SignIn />} />
-        <Route path="/authentication/sign-up" element={<SignUp />} />
+
 
         {/* جميع المسارات من ملف routes.js محمية بواسطة PrivateRoute */}
         {routes.map((route) => (

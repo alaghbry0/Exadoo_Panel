@@ -9,7 +9,7 @@ import MDTypography from "components/MDTypography";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 
-import { getSubscriptionTypes, createSubscriptionType } from "services/api";
+import { getSubscriptionTypes } from "services/api";
 import SubscriptionTypeCard from "layouts/ManagePlans/components/SubscriptionTypeCard";
 import SubscriptionSettings from "layouts/ManagePlans/components/SubscriptionSettings";
 import AddSubscriptionTypeModal from "layouts/ManagePlans/components/AddSubscriptionTypeModal";

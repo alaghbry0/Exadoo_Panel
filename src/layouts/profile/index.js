@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 
 // @mui material components
-import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";

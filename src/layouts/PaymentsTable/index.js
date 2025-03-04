@@ -19,7 +19,7 @@ function PaymentsTable() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({
+  const [filters] = useState({
     page: 1,
     page_size: 20,
   });
