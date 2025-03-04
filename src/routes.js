@@ -40,10 +40,9 @@ import Dashboard from "layouts/dashboard";
 import Tables from "layouts/tables";
 import ManagePlans from "layouts/ManagePlans";
 import PaymentsTable from "layouts/PaymentsTable";
-import Notifications from "layouts/notifications";
+
 import Profile from "layouts/profile";
 import SignIn from "layouts/authentication/sign-in";
-import SignUp from "layouts/authentication/sign-up";
 
 import Icon from "@mui/material/Icon";
 
@@ -80,14 +79,7 @@ const routes = [
     route: "/PaymentsTable",
     component: <PaymentsTable />,
   },
-  {
-    type: "collapse",
-    name: "Notifications",
-    key: "notifications",
-    icon: <Icon fontSize="small">notifications</Icon>,
-    route: "/notifications",
-    component: <Notifications />,
-  },
+
   {
     type: "collapse",
     name: "Profile",
