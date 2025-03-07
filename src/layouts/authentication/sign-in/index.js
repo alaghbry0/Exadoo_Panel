@@ -54,7 +54,7 @@ function Basic() {
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
             onError={handleGoogleFailure}
-            useOneTap
+
             prompt="select_account"
             context="signin"
             is_fedcm_supported={false}
