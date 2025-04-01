@@ -6,14 +6,13 @@ import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-
 import DataTable from "examples/Tables/DataTable";
 import { getPayments } from "services/api";
 import { format } from "date-fns";
 import Button from "@mui/material/Button";
-import InputAdornment from "@mui/material/InputAdornment"; // استيراد InputAdornment
-import SearchIcon from "@mui/icons-material/Search"; // استيراد SearchIcon
-import CircularProgress from "@mui/material/CircularProgress"; // استيراد CircularProgress
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
+import CircularProgress from "@mui/material/CircularProgress";
 
 function PaymentsTable() {
   const [payments, setPayments] = useState([]);
@@ -28,8 +27,16 @@ function PaymentsTable() {
     async function fetchData() {
       setLoading(true);
       try {
-        const response = await getPayments({ ...filters, search: searchTerm });
-        setPayments(response.data);
+        // لتخفيف الضغط على الخادم، نقوم بتخزين البيانات مؤقتاً في sessionStorage
+        const cacheKey = `payments_${filters.page}_${filters.page_size}_${searchTerm}`;
+        const cachedData = sessionStorage.getItem(cacheKey);
+        if (cachedData) {
+          setPayments(JSON.parse(cachedData));
+        } else {
+          const response = await getPayments({ ...filters, search: searchTerm });
+          setPayments(response.data);
+          sessionStorage.setItem(cacheKey, JSON.stringify(response.data));
+        }
       } catch (error) {
         console.error("Error fetching payments:", error);
       } finally {
@@ -39,37 +46,48 @@ function PaymentsTable() {
     fetchData();
   }, [filters, searchTerm]);
 
+  // تحديث الأعمدة لتشمل الحقول الجديدة
   const columns = [
     { Header: "Full Name", accessor: "full_name", align: "left" },
     { Header: "Username", accessor: "username", align: "left" },
     { Header: "Telegram ID", accessor: "telegram_id", align: "left" },
+    { Header: "Payment Token", accessor: "payment_token", align: "left" },
     { Header: "TX Hash", accessor: "tx_hash", align: "left" },
-    { Header: "User Wallet Address", accessor: "user_wallet_address", align: "left" },
+    { Header: "Amount", accessor: "amount", align: "right" },
+    { Header: "Amount Received", accessor: "amount_received", align: "right" },
+    { Header: "Payment Method", accessor: "payment_method", align: "left" },
+    { Header: "Processed At", accessor: "processed_at", align: "left" },
+    { Header: "Error Message", accessor: "error_message", align: "left" },
     { Header: "Status", accessor: "status", align: "center" },
-    { Header: "Created At", accessor: "created_at", align: "left" },
-    { Header: "Actions", accessor: "actions", align: "center" }, // تغيير Header إلى Actions ليكون أكثر وضوحًا
+    { Header: "Actions", accessor: "actions", align: "center" },
   ];
 
+  // تعديل دالة إنشاء الصفوف لتشمل الحقول الجديدة
   const createRows = (payment) => ({
     full_name: payment.full_name,
     username: payment.username,
     telegram_id: payment.telegram_id,
+    payment_token: payment.payment_token,
     tx_hash: payment.tx_hash,
-    user_wallet_address: payment.user_wallet_address,
+    amount: payment.amount,
+    amount_received: payment.amount_received,
+    payment_method: payment.payment_method,
+    processed_at: payment.processed_at
+      ? format(new Date(payment.processed_at), "dd/MM/yyyy HH:mm")
+      : "",
+    error_message: payment.error_message,
     status: payment.status,
-    created_at: format(new Date(payment.created_at), "dd/MM/yyyy HH:mm"),
-    // تغيير accessor إلى actions ليتطابق مع Header
     actions: (
       <Button variant="outlined" size="small" onClick={() => handleView(payment)}>
-        View Details {/* تغيير النص ليكون أكثر وضوحًا */}
+        View Details
       </Button>
     ),
   });
 
   const handleView = (payment) => {
-    // يمكن فتح نافذة منبثقة لعرض تفاصيل الدفعة
+    // هنا يمكن فتح نافذة منبثقة لعرض تفاصيل الدفعة بشكل موسع
     console.log("View payment:", payment);
-    alert(`عرض تفاصيل الدفعة لـ: ${payment.full_name}`); // إضافة تنبيه بسيط كمثال
+    alert(`عرض تفاصيل الدفعة لـ: ${payment.full_name}`);
   };
 
   const rows = payments.map(createRows);
@@ -91,11 +109,11 @@ function PaymentsTable() {
                 borderRadius="lg"
                 coloredShadow="info"
                 display="flex"
-                justifyContent="space-between" // إضافة توزيع العناصر على طول الخط
-                alignItems="center" // إضافة محاذاة العناصر عموديًا
+                justifyContent="space-between"
+                alignItems="center"
               >
                 <MDTypography variant="h6" color="white">
-                  Payments Table {/* تغيير العنوان ليكون أكثر وضوحًا */}
+                  Payments Table
                 </MDTypography>
               </MDBox>
               <MDBox
@@ -106,27 +124,24 @@ function PaymentsTable() {
                 flexWrap="wrap"
                 gap={2}
               >
-                {" "}
-                {/* إضافة flexWrap و gap لتجاوب أفضل */}
                 <MDInput
                   label="Search Payments"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   fullWidth
                   InputProps={{
-                    // إضافة InputProps لتحسين حقل البحث
                     startAdornment: (
                       <InputAdornment position="start">
-                        <SearchIcon color="primary" /> {/* إضافة أيقونة البحث */}
+                        <SearchIcon color="primary" />
                       </InputAdornment>
                     ),
                   }}
                 />
               </MDBox>
               <MDBox pt={3}>
-                {loading ? ( // إضافة حالة التحميل
+                {loading ? (
                   <MDBox display="flex" justifyContent="center" py={4}>
-                    <CircularProgress color="primary" /> {/* استخدام مؤشر تحميل مرئي */}
+                    <CircularProgress color="primary" />
                   </MDBox>
                 ) : (
                   <DataTable

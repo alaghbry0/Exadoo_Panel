@@ -40,7 +40,7 @@ import Dashboard from "layouts/dashboard";
 import Tables from "layouts/tables";
 import ManagePlans from "layouts/ManagePlans";
 import PaymentsTable from "layouts/PaymentsTable";
-
+import IncomingTransactions from "layouts/incomingTransactions";
 import Profile from "layouts/profile";
 import SignIn from "layouts/authentication/sign-in";
 
@@ -78,6 +78,14 @@ const routes = [
     icon: <Icon fontSize="small">format_textdirection_r_to_l</Icon>,
     route: "/PaymentsTable",
     component: <PaymentsTable />,
+  },
+  {
+    type: "collapse",
+    name: "Incoming Transactions",
+    key: "incomingTransactions",
+    icon: <Icon fontSize="small">receipt</Icon>,
+    route: "/incoming-transactions",
+    component: <IncomingTransactions />,
   },
 
   {

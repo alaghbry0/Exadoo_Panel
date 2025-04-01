@@ -178,6 +178,18 @@ export const getPayments = async (filters = {}) => {
   }
 };
 
+export const getIncomingTransactions = async (filters = {}) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/incoming-transactions`, {
+      headers: getAuthHeaders(),
+      params: filters,
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
 /**
  * 3. تعديل اشتراك مستخدم
  * ترسل البيانات المراد تحديثها في جسم الطلب (body) على سبيل المثال:

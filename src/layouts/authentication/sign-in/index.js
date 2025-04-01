@@ -54,7 +54,6 @@ function Basic() {
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
             onError={handleGoogleFailure}
-
             prompt="select_account"
             context="signin"
             is_fedcm_supported={false}
