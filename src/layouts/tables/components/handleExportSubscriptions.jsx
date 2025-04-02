@@ -1,7 +1,7 @@
 // layouts/tables/components/handleExportSubscriptions.jsx
 import axios from "axios";
 import * as XLSX from "xlsx";
-const API_BASE_URL = "https://exaaadoo-72a1f8b32d36.herokuapp.com";
+const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
 
 // دالة للحصول على هيدر التفويض (Authorization) للمشرف
 const getAuthHeaders = () => {

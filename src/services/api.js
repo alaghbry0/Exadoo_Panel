@@ -2,7 +2,7 @@
 import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
-//const API_BASE_URL = "https://exaaadoo-72a1f8b32d36.herokuapp.com";
+
 const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
 
 const getAuthHeaders = () => {

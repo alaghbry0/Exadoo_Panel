@@ -12,17 +12,31 @@ import CircularProgress from "@mui/material/CircularProgress";
 function IncomingTransactions() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  // إضافة حالة البحث
+  const [searchTerm, setSearchTerm] = useState("");
   const [filters] = useState({
     page: 1,
     page_size: 20,
   });
 
+  // دالة لتحديث حالة البحث تُمرر إلى DashboardNavbar
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+  };
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
       try {
-        const response = await getIncomingTransactions(filters);
-        setTransactions(response);
+        const cacheKey = `incoming_${filters.page}_${filters.page_size}_${searchTerm}`;
+        const cachedData = sessionStorage.getItem(cacheKey);
+        if (cachedData) {
+          setTransactions(JSON.parse(cachedData));
+        } else {
+          const response = await getIncomingTransactions({ ...filters, search: searchTerm });
+          setTransactions(response);
+          sessionStorage.setItem(cacheKey, JSON.stringify(response));
+        }
       } catch (error) {
         console.error("Error fetching incoming transactions:", error);
       } finally {
@@ -30,7 +44,7 @@ function IncomingTransactions() {
       }
     }
     fetchData();
-  }, [filters]);
+  }, [filters, searchTerm]);
 
   const columns = [
     { Header: "TX Hash", accessor: "txhash", align: "left" },
@@ -56,7 +70,8 @@ function IncomingTransactions() {
 
   return (
     <DashboardLayout>
-      <DashboardNavbar />
+      {/* تمرير دالة تحديث البحث إلى DashboardNavbar */}
+      <DashboardNavbar onSearchChange={handleSearchChange} />
       <MDBox pt={6} pb={3}>
         <Grid container spacing={6}>
           <Grid item xs={12}>
