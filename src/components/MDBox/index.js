@@ -26,7 +26,15 @@ const MDBox = forwardRef(
     <MDBoxRoot
       {...rest}
       ref={ref}
-      ownerState={{ variant, bgColor, color, opacity, borderRadius, shadow, coloredShadow }}
+      ownerState={{
+        variant,
+        bgColor,
+        color,
+        opacity,
+        borderRadius,
+        shadow,
+        coloredShadow,
+      }}
     />
   )
 );

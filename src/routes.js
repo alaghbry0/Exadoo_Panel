@@ -43,7 +43,7 @@ import PaymentsTable from "layouts/PaymentsTable";
 import IncomingTransactions from "layouts/incomingTransactions";
 import Profile from "layouts/profile";
 import SignIn from "layouts/authentication/sign-in";
-
+import ChatbotSettings from "layouts/ChatbotSettings";
 import Icon from "@mui/material/Icon";
 
 const routes = [
@@ -71,6 +71,16 @@ const routes = [
     route: "/tables",
     component: <Tables />,
   },
+
+  {
+    type: "collapse",
+    name: "Chatbot Settings",
+    key: "chatbot-settings",
+    icon: <Icon fontSize="small">smart_toy</Icon>,
+    route: "/chatbot-settings",
+    component: <ChatbotSettings />,
+  },
+
   {
     type: "collapse",
     name: "Payments Table",

@@ -66,6 +66,29 @@ export default function App() {
     document.scrollingElement.scrollTop = 0;
   }, [pathname]);
 
+  // ======= هنا أضفنا ال useEffect الخاص بالودجت =======
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://alaghbry0.github.io/chat-widget/widget.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    script.onload = () => {
+      window.ChatWidget?.init({
+        projectId: "Exaado Admin bannel",
+        apiUrl: "https://exadoo-rxr9.onrender.com/bot/chat/stream",
+        theme: "light",
+        position: "bottom-right",
+        direction: "rtl",
+      });
+    };
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+  // ================================================
+
   const content = (
     <>
       {layout === "dashboard" && (
@@ -79,49 +102,17 @@ export default function App() {
             onMouseLeave={handleOnMouseLeave}
           />
           <Configurator />
-          <MDBox
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            width="3.25rem"
-            height="3.25rem"
-            bgColor="white"
-            shadow="sm"
-            borderRadius="50%"
-            position="fixed"
-            right="2rem"
-            bottom="2rem"
-            zIndex={99}
-            color="dark"
-            sx={{ cursor: "pointer" }}
-            onClick={handleConfiguratorOpen}
-          >
-            <Icon fontSize="small" color="inherit">
-              settings
-            </Icon>
-          </MDBox>
         </>
       )}
       <Routes>
-        {/* الصفحات العامة */}
         <Route path="/authentication/sign-in" element={<SignIn />} />
-
-        {/* جميع المسارات من ملف routes.js محمية بواسطة PrivateRoute */}
         {routes.map((route) => (
           <Route
             key={route.key}
             path={route.route}
-            element={
-              <PrivateRoute requiredRole={route.role}>
-                {" "}
-                {/* تم التعديل: تمرير role prop */}
-                {route.component}
-              </PrivateRoute>
-            }
+            element={<PrivateRoute requiredRole={route.role}>{route.component}</PrivateRoute>}
           />
         ))}
-
-        {/* إعادة التوجيه لأي مسار غير معرف */}
         <Route path="*" element={<Navigate to="/dashboard" />} />
       </Routes>
     </>

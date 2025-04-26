@@ -7,50 +7,56 @@ import MDSnackbar from "components/MDSnackbar";
 import { getWalletAddress, updateWalletAddress } from "services/api";
 
 function WalletSettingsSection() {
-  const [walletAddress, setWalletAddress] = useState("");
+  const [walletData, setWalletData] = useState({
+    walletAddress: "",
+    apiKey: "",
+  });
   const [successSB, setSuccessSB] = useState(false);
   const [errorSB, setErrorSB] = useState(false);
 
-  // دوال فتح وغلق الإشعارات
-  const openSuccessSB = () => setSuccessSB(true);
-  const closeSuccessSB = () => setSuccessSB(false);
-  const openErrorSB = () => setErrorSB(true);
-  const closeErrorSB = () => setErrorSB(false);
-
-  // جلب العنوان عند تحميل المكون
   useEffect(() => {
     getWalletAddress()
       .then((res) => {
-        setWalletAddress(res.data.wallet_address);
+        setWalletData({
+          walletAddress: res.data.wallet_address || "",
+          apiKey: res.data.api_key || "",
+        });
       })
       .catch((error) => {
-        console.error("Error fetching wallet address:", error);
-        openErrorSB(); // إظهار إشعار الخطأ عند حدوث مشكلة
+        console.error("Error fetching wallet data:", error);
+        setErrorSB(true);
       });
   }, []);
 
-  const handleSaveWalletAddress = () => {
-    updateWalletAddress(walletAddress)
+  const handleSave = () => {
+    updateWalletAddress({
+      wallet_address: walletData.walletAddress,
+      api_key: walletData.apiKey,
+    })
       .then((res) => {
-        openSuccessSB(); // إظهار إشعار النجاح عند حفظ العنوان
+        setSuccessSB(true);
       })
       .catch((error) => {
-        console.error("Error updating wallet address:", error);
-        openErrorSB(); // إظهار إشعار الخطأ عند حدوث مشكلة
+        console.error("Error updating data:", error);
+        setErrorSB(true);
       });
   };
 
-  // تعريف عناصر الإشعارات
+  const handleChange = (field) => (e) => {
+    setWalletData((prev) => ({
+      ...prev,
+      [field]: e.target.value,
+    }));
+  };
+
   const renderSuccessSB = (
     <MDSnackbar
       color="success"
       icon="check"
       title="نجاح"
-      content="تم حفظ عنوان المحفظة بنجاح"
-      dateTime=""
+      content="تم حفظ البيانات بنجاح"
       open={successSB}
-      onClose={closeSuccessSB}
-      close={closeSuccessSB}
+      onClose={() => setSuccessSB(false)}
       bgWhite
     />
   );
@@ -60,11 +66,9 @@ function WalletSettingsSection() {
       color="error"
       icon="warning"
       title="خطأ"
-      content="حدث خطأ أثناء حفظ عنوان المحفظة"
-      dateTime=""
+      content="حدث خطأ أثناء حفظ البيانات"
       open={errorSB}
-      onClose={closeErrorSB}
-      close={closeErrorSB}
+      onClose={() => setErrorSB(false)}
       bgWhite
     />
   );
@@ -72,28 +76,40 @@ function WalletSettingsSection() {
   return (
     <MDBox p={2} mt={4}>
       <MDTypography variant="h6" fontWeight="medium" mb={2}>
-        Wallet Settings
+        إعدادات الأمان
       </MDTypography>
-      <MDBox mb={3}>
-        <MDTypography variant="body2" color="text">
-          Please enter your TON Wallet address to receive payments.
+
+      <MDBox mb={4}>
+        <MDTypography variant="body2" color="text" mb={2}>
+          إعدادات المحفظة
         </MDTypography>
-      </MDBox>
-      <MDBox mb={3}>
         <MDInput
           type="text"
-          label="TON Wallet Address"
+          label="عنوان المحفظة (TON)"
           fullWidth
-          value={walletAddress}
-          onChange={(e) => setWalletAddress(e.target.value)}
+          value={walletData.walletAddress}
+          onChange={handleChange("walletAddress")}
+          sx={{ mb: 2 }}
+        />
+
+        <MDInput
+          type="password"
+          label="مفتاح API"
+          fullWidth
+          value={walletData.apiKey ? `••••${walletData.apiKey.slice(-4)}` : ""}
+          onChange={handleChange("apiKey")}
+          inputProps={{
+            autoComplete: "new-password",
+          }}
         />
       </MDBox>
+
       <MDBox mt={3} display="flex" justifyContent="flex-end">
-        <MDButton variant="gradient" color="info" onClick={handleSaveWalletAddress}>
-          Save Wallet Address
+        <MDButton variant="gradient" color="info" onClick={handleSave}>
+          حفظ الإعدادات
         </MDButton>
       </MDBox>
-      {/* عرض الإشعارات */}
+
       {renderSuccessSB}
       {renderErrorSB}
     </MDBox>

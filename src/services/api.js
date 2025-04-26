@@ -265,16 +265,30 @@ export const removeAuthToken = () => {
  * يتم استخدام apiClient بحيث تمر كل الطلبات عبر الـ interceptors.
  */
 export const getUsers = () => {
-  return apiClient.get("/api/admin/users");
+  return axios.get(`${API_BASE_URL}/api/admin/users`, {
+    headers: getAuthHeaders(),
+  });
 };
 
 export const deleteUser = (email) => {
-  return apiClient.delete("/api/admin/remove_user", { data: { email } });
+  return axios.delete(
+    `${API_BASE_URL}/api/admin/remove_user`,
+    { data: { email } },
+    {
+      headers: getAuthHeaders(),
+    }
+  );
 };
 
 export const addUser = (email, displayName, role) => {
   const endpoint = role === "owner" ? "add_owner" : "add_admin";
-  return apiClient.post(`/api/admin/${endpoint}`, { email, display_name: displayName });
+  return axios.post(
+    `${API_BASE_URL}/api/admin/${endpoint}`,
+    { email, display_name: displayName },
+    {
+      headers: getAuthHeaders(),
+    }
+  );
 };
 
 /**
@@ -339,13 +353,97 @@ apiClient.interceptors.response.use(
 );
 
 export const getWalletAddress = () => {
-  return axios.get(`${API_BASE_URL}/api/admin/wallet`, { headers: getAuthHeaders() });
+  return axios.get(`${API_BASE_URL}/api/admin/wallet`, {
+    headers: getAuthHeaders(),
+  });
 };
 
-export const updateWalletAddress = (walletAddress) => {
+export const updateWalletAddress = (walletData) => {
+  // تغيير اسم المعطى
   return axios.post(
     `${API_BASE_URL}/api/admin/wallet`,
-    { wallet_address: walletAddress },
-    { headers: getAuthHeaders() }
+    {
+      wallet_address: walletData.walletAddress, // إرسال عنوان المحفظة
+      api_key: walletData.apiKey, // إضافة حقل API Key
+    },
+    {
+      headers: getAuthHeaders(),
+    }
   );
+};
+
+// API functions with auth headers included
+
+export const fetchChatbotSettings = () => {
+  return axios.get(`${API_BASE_URL}/settings`, {
+    headers: getAuthHeaders(),
+  });
+};
+
+// تحديث إعدادات الشات بوت
+export const updateChatbotSettings = (settings) => {
+  // تأكد من أن faq_questions هي سلسلة نصية عند الإرسال
+  const processedSettings = {
+    ...settings,
+    faq_questions:
+      typeof settings.faq_questions === "string"
+        ? settings.faq_questions
+        : JSON.stringify(settings.faq_questions),
+  };
+
+  return axios.post(`${API_BASE_URL}/settings`, processedSettings, {
+    headers: getAuthHeaders(),
+  });
+};
+// جلب قائمة عناصر قاعدة المعرفة بناءً على معطيات الاستعلام
+export const fetchKnowledgeBase = (params) => {
+  return axios.get(`${API_BASE_URL}/knowledge`, {
+    headers: getAuthHeaders(),
+    params: params,
+  });
+};
+
+// جلب عنصر معرفة محدد بواسطة المعرف
+export const fetchKnowledgeItem = (itemId) => {
+  return axios.get(`${API_BASE_URL}/knowledge/${itemId}`, {
+    headers: getAuthHeaders(),
+  });
+};
+
+// إضافة عنصر جديد إلى قاعدة المعرفة
+export const addKnowledgeItem = (item) => {
+  return axios.post(`${API_BASE_URL}/knowledge`, item, {
+    headers: getAuthHeaders(),
+  });
+};
+
+// تحديث عنصر معرفة موجود
+export const updateKnowledgeItem = (itemId, item) => {
+  return axios.put(`${API_BASE_URL}/knowledge/${itemId}`, item, {
+    headers: getAuthHeaders(),
+  });
+};
+
+// حذف عنصر من قاعدة المعرفة
+export const deleteKnowledgeItem = (itemId) => {
+  return axios.delete(`${API_BASE_URL}/knowledge/${itemId}`, {
+    headers: getAuthHeaders(),
+  });
+};
+
+// دالة إعادة بناء embeddings
+export const rebuildEmbeddings = async (background = false) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/rebuild-embeddings`,
+      { background },
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error rebuilding embeddings:", error);
+    throw error;
+  }
 };

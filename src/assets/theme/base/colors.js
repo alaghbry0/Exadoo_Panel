@@ -18,6 +18,19 @@ Coded by www.creative-tim.com
  * You can add new color using this file.
  * You can customized the colors for the entire Material Dashboard 2 React using thie file.
  */
+const hexToRgb = (hex) => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
+    : null;
+};
 
 const colors = {
   background: {
@@ -30,7 +43,8 @@ const colors = {
   },
 
   transparent: {
-    main: "transparent",
+    main: "rgba(255, 255, 255, 0)", // تعديل هنا
+    focus: "rgba(255, 255, 255, 0.1)", // إضافة شفافية مع لمسة لونية
   },
 
   white: {
@@ -83,6 +97,22 @@ const colors = {
     main: "#344767",
     focus: "#2c3c58",
   },
+
+  transparentInfo: `rgba(${hexToRgb("#1A73E8").r}, ${hexToRgb("#1A73E8").g}, ${
+    hexToRgb("#1A73E8").b
+  }, 0)`,
+  transparentPrimary: `rgba(${hexToRgb("#e91e63").r}, ${hexToRgb("#e91e63").g}, ${
+    hexToRgb("#e91e63").b
+  }, 0)`,
+  transparentSuccess: `rgba(${hexToRgb("#4CAF50").r}, ${hexToRgb("#4CAF50").g}, ${
+    hexToRgb("#4CAF50").b
+  }, 0)`,
+  transparentWarning: `rgba(${hexToRgb("#fb8c00").r}, ${hexToRgb("#fb8c00").g}, ${
+    hexToRgb("#fb8c00").b
+  }, 0)`,
+  transparentError: `rgba(${hexToRgb("#F44335").r}, ${hexToRgb("#F44335").g}, ${
+    hexToRgb("#F44335").b
+  }, 0)`,
 
   grey: {
     100: "#f8f9fa",
