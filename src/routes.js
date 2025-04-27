@@ -8,7 +8,7 @@
 
 Coded by www.creative-tim.com
 
- =========================================================
+=========================================================
 
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
@@ -71,7 +71,6 @@ const routes = [
     route: "/tables",
     component: <Tables />,
   },
-
   {
     type: "collapse",
     name: "Chatbot Settings",
@@ -80,7 +79,6 @@ const routes = [
     route: "/chatbot-settings",
     component: <ChatbotSettings />,
   },
-
   {
     type: "collapse",
     name: "Payments Table",
@@ -97,7 +95,6 @@ const routes = [
     route: "/incoming-transactions",
     component: <IncomingTransactions />,
   },
-
   {
     type: "collapse",
     name: "Profile",
@@ -106,7 +103,6 @@ const routes = [
     route: "/profile",
     component: <Profile />,
   },
-
   {
     type: "collapse",
     name: "Sign In",
