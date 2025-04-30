@@ -447,3 +447,15 @@ export const rebuildEmbeddings = async (background = false) => {
     throw error;
   }
 };
+
+export const fetchReminderSettings = () => {
+  return axios.get(`${API_BASE_URL}/api/admin/admin/reminder-settings`, {
+    headers: getAuthHeaders(),
+  });
+};
+
+export const updateReminderSettings = (data) => {
+  return axios.put(`${API_BASE_URL}/api/admin/admin/reminder-settings`, data, {
+    headers: getAuthHeaders(),
+  });
+};
