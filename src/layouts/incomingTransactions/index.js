@@ -50,10 +50,9 @@ function IncomingTransactions() {
     { Header: "TX Hash", accessor: "txhash", align: "left" },
     { Header: "Sender Address", accessor: "sender_address", align: "left" },
     { Header: "Amount", accessor: "amount", align: "right" },
-    { Header: "Payment Token", accessor: "payment_token", align: "left" },
+    { Header: "Memo", accessor: "payment_token", align: "left" },
     { Header: "Processed", accessor: "processed", align: "center" },
     { Header: "Received At", accessor: "received_at", align: "left" },
-    { Header: "Memo", accessor: "memo", align: "left" },
   ];
 
   const createRows = (transaction) => ({
@@ -63,7 +62,6 @@ function IncomingTransactions() {
     payment_token: transaction.payment_token,
     processed: transaction.processed ? "Yes" : "No",
     received_at: transaction.received_at,
-    memo: transaction.memo,
   });
 
   const rows = transactions.map(createRows);

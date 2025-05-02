@@ -448,14 +448,14 @@ export const rebuildEmbeddings = async (background = false) => {
   }
 };
 
-export const fetchReminderSettings = () => {
-  return axios.get(`${API_BASE_URL}/api/admin/admin/reminder-settings`, {
+export const updateReminderSettings = (data) => {
+  return axios.put(`${API_BASE_URL}/api/admin/admin/reminder-settings`, data, {
     headers: getAuthHeaders(),
   });
 };
 
-export const updateReminderSettings = (data) => {
-  return axios.put(`${API_BASE_URL}/api/admin/admin/reminder-settings`, data, {
+export const fetchReminderSettings = () => {
+  return axios.get(`${API_BASE_URL}/api/admin/admin/reminder-settings`, {
     headers: getAuthHeaders(),
   });
 };

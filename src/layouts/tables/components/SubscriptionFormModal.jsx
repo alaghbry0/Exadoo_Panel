@@ -93,6 +93,7 @@ const SubscriptionFormModal = ({
                 value={formData.telegram_id}
                 onChange={handleChange}
                 required
+                disabled={isEdit} // أضف هذا السطر
               />
             </Grid>
             <Grid item xs={12}>
@@ -115,6 +116,7 @@ const SubscriptionFormModal = ({
                 value={formData.username}
                 onChange={handleChange}
                 required
+                disabled={isEdit} // أضف هذا السطر
               />
             </Grid>
             <Grid item xs={12}>
@@ -126,6 +128,7 @@ const SubscriptionFormModal = ({
                 value={formData.subscription_type_id}
                 onChange={handleChange}
                 required
+                disabled={isEdit}
                 SelectProps={{
                   MenuProps: {
                     MenuListProps: {
