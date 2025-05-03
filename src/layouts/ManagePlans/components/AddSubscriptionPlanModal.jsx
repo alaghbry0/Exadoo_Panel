@@ -1,4 +1,3 @@
-// src/layouts/managePlans/components/AddSubscriptionPlanModal.jsx
 import React, { useState } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -12,6 +11,7 @@ import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
 import { createSubscriptionPlan } from "services/api";
+import Grid from "@mui/material/Grid"; // استيراد Grid للتنسيق
 
 // Styled components لضبط التنسيق
 const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
@@ -40,6 +40,7 @@ const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
 function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdded }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [originalPrice, setOriginalPrice] = useState(""); // إضافة حالة للسعر الأصلي
   const [durationDays, setDurationDays] = useState("");
   const [telegramStarsPrice, setTelegramStarsPrice] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -50,8 +51,9 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
       subscription_type_id: subscriptionTypeId,
       name,
       price: parseFloat(price),
+      original_price: originalPrice ? parseFloat(originalPrice) : parseFloat(price), // استخدام السعر نفسه إذا لم يتم تحديد سعر أصلي
       duration_days: parseInt(durationDays, 10),
-      telegram_stars_price: parseInt(telegramStarsPrice, 10),
+      telegram_stars_price: parseInt(telegramStarsPrice, 10) || 0,
       is_active: isActive,
     };
     try {
@@ -61,6 +63,7 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
       // إعادة تعيين الحقول بعد الإضافة الناجحة
       setName("");
       setPrice("");
+      setOriginalPrice("");
       setDurationDays("");
       setTelegramStarsPrice("");
       setIsActive(true);
@@ -88,16 +91,37 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
             InputLabelProps={{ style: { fontWeight: "bold" } }}
             margin="dense"
           />
-          <MDInput
-            label="Price"
-            type="number"
-            fullWidth
-            variant="outlined"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            InputLabelProps={{ style: { fontWeight: "bold" } }}
-            margin="dense"
-          />
+
+          {/* قسم الأسعار */}
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
+              <MDInput
+                label="Original Price"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={originalPrice}
+                onChange={(e) => setOriginalPrice(e.target.value)}
+                InputLabelProps={{ style: { fontWeight: "bold" } }}
+                margin="dense"
+                helperText="Price before discount"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <MDInput
+                label="Final Price"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                InputLabelProps={{ style: { fontWeight: "bold" } }}
+                margin="dense"
+                helperText="Price after discount (if applicable)"
+              />
+            </Grid>
+          </Grid>
+
           <MDInput
             label="Duration (Days)"
             type="number"

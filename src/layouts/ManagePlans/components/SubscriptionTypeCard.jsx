@@ -138,6 +138,25 @@ function SubscriptionTypeCard({ subscriptionType, refreshTypes }) {
     }
   };
 
+  // دالة لعرض السعر مع الخصم إذا وجد
+  const displayPrice = (plan) => {
+    // إذا كان هناك سعر أصلي وهو أعلى من السعر الحالي، نعرض كلاهما
+    if (plan.original_price && parseFloat(plan.original_price) > parseFloat(plan.price)) {
+      return (
+        <MDBox display="flex" alignItems="center">
+          <MDTypography variant="body2" fontWeight="medium" color="dark" mr={1}>
+            ${plan.price}
+          </MDTypography>
+          <MDTypography variant="body2" color="text" sx={{ textDecoration: "line-through" }}>
+            ${plan.original_price}
+          </MDTypography>
+        </MDBox>
+      );
+    }
+    // وإلا نعرض السعر العادي فقط
+    return `$${plan.price}`;
+  };
+
   return (
     <Card>
       <MDBox p={3}>
@@ -230,11 +249,16 @@ function SubscriptionTypeCard({ subscriptionType, refreshTypes }) {
                 borderRadius="md" // إضافة زوايا مدورة للخطط
                 sx={{ backgroundColor: "#f8f9fa" }} // لون خلفية أفتح للخطط
               >
-                <MDTypography variant="body2" fontWeight="medium" color="dark">
-                  {" "}
-                  {/* معلومات الخطة بخط أوضح */}
-                  {plan.name} - ${plan.price} for {plan.duration_days} days
-                </MDTypography>
+                <MDBox>
+                  <MDTypography variant="body2" fontWeight="medium" color="dark">
+                    {plan.name} - {displayPrice(plan)} for {plan.duration_days} days
+                  </MDTypography>
+                  {plan.telegram_stars_price > 0 && (
+                    <MDTypography variant="caption" color="text">
+                      Telegram Stars: {plan.telegram_stars_price}
+                    </MDTypography>
+                  )}
+                </MDBox>
                 <MDBox display="flex" justifyContent="flex-end" gap={1}>
                   {" "}
                   {/* استخدام gap لتوفير مساحة بين أزرار الخطة */}
