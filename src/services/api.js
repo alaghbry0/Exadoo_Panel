@@ -359,12 +359,11 @@ export const getWalletAddress = () => {
 };
 
 export const updateWalletAddress = (walletData) => {
-  // تغيير اسم المعطى
   return axios.post(
     `${API_BASE_URL}/api/admin/wallet`,
     {
-      wallet_address: walletData.walletAddress, // إرسال عنوان المحفظة
-      api_key: walletData.apiKey, // إضافة حقل API Key
+      wallet_address: walletData.wallet_address, // تم التصحيح هنا
+      api_key: walletData.api_key, // تم التصحيح هنا
     },
     {
       headers: getAuthHeaders(),

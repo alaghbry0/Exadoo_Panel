@@ -93,8 +93,8 @@ function WalletSettingsSection() {
         />
 
         <MDInput
-          type="password"
-          label="مفتاح API"
+          type="text"
+          label="DEEPSEEK API"
           fullWidth
           value={walletData.apiKey ? `••••${walletData.apiKey.slice(-4)}` : ""}
           onChange={handleChange("apiKey")}
