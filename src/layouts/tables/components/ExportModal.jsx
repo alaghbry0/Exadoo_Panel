@@ -12,8 +12,8 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import MDBox from "components/MDBox";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
-5;
 import MDTypography from "components/MDTypography";
+5;
 
 const ExportModal = ({ open, onClose, onSubmit, subscriptionTypes = [] }) => {
   const [filters, setFilters] = useState({
