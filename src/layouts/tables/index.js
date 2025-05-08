@@ -1,493 +1,569 @@
-// src/layouts/tables/Table.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import Grid from "@mui/material/Grid";
-import Card from "@mui/material/Card";
-import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
-import MDButton from "components/MDButton";
-import IconButton from "@mui/material/IconButton";
-import CircularProgress from "@mui/material/CircularProgress";
-import EditIcon from "@mui/icons-material/Edit";
-import FilterListIcon from "@mui/icons-material/FilterList";
+// layouts/tables/index.js
+import React, { useState, useEffect, useCallback, forwardRef } from "react";
+// ١. استيراد IconButton و RefreshIcon
+import { Card, CircularProgress, Snackbar, IconButton, Tooltip, Grid } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import Chip from "@mui/material/Chip";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import Fade from "@mui/material/Fade";
-import Tooltip from "@mui/material/Tooltip";
-import Skeleton from "@mui/material/Skeleton";
+import MuiAlert from "@mui/material/Alert";
+import MDBox from "components/MDBox";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import DashboardNavbar from "examples/Navbars/DashboardNavbar"; // يمكنك وضع الزر هنا أيضًا إذا أردت
+import Footer from "examples/Footer";
+import MDTypography from "components/MDTypography";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
-import DataTable from "examples/Tables/DataTable";
+// Components
+import TabsManager from "layouts/tables/components/TabsManager";
+import SubscriptionTableToolbar from "layouts/tables/components/SubscriptionTableToolbar";
+import SubscriptionTable from "layouts/tables/components/SubscriptionTable";
+import SubscriptionFormModal from "layouts/tables/components/SubscriptionFormModal";
+import PendingSubscriptionsTable from "layouts/tables/components/PendingSubscriptionsTable";
+import LegacySubscriptionsTable from "layouts/tables/components/LegacySubscriptionsTable";
+
+// Data
 import {
   getSubscriptions,
   getSubscriptionTypes,
-  updateSubscription,
   addSubscription,
-  // تم إزالة deleteSubscription
+  updateSubscription,
+  getSubscriptionSources,
+  getPendingSubscriptions,
+  handlePendingSubscriptionAction,
+  getLegacySubscriptions,
 } from "services/api";
-import { format } from "date-fns";
-import SubscriptionFormModal from "layouts/tables/components/SubscriptionFormModal";
-import ExportModal from "layouts/tables/components/ExportModal";
-import handleExportSubscriptions from "layouts/tables/components/handleExportSubscriptions";
 
-function Table() {
-  const [subscriptions, setSubscriptions] = useState([]);
+const CustomAlert = forwardRef(function CustomAlert(props, ref) {
+  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
+});
+
+function Tables() {
+  // State for tabs
+  const [activeTab, setActiveTab] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [legacyCount, setLegacyCount] = useState(0);
+
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [availableSources, setAvailableSources] = useState([]);
+
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [totalSubscriptions, setTotalSubscriptions] = useState(0);
+  const [filters, setFilters] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [hasMore, setHasMore] = useState(true);
-  const [filters, setFilters] = useState({
-    page: 1,
-    page_size: 10,
-    sort_by: "created_at",
-    sort_order: "desc",
-    active_only: false,
-  });
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalInitialValues, setModalInitialValues] = useState({});
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [filterMenuAnchor, setFilterMenuAnchor] = useState(null);
-  const [activeTypeFilter, setActiveTypeFilter] = useState(null);
-  const observer = useRef();
+  const [order, setOrder] = useState("desc");
+  const [orderBy, setOrderBy] = useState("id");
 
-  // دالة استقبال تغييرات البحث من DashboardNavbar
-  const handleSearchChange = (value) => {
-    setSearchTerm(value);
-    setSubscriptions([]);
-    setFilters((prev) => ({ ...prev, page: 1 }));
-    setHasMore(true);
+  const [pendingSubscriptions, setPendingSubscriptions] = useState([]);
+  const [pendingPage, setPendingPage] = useState(0);
+  const [pendingRowsPerPage, setPendingRowsPerPage] = useState(20);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingLoading, setPendingLoading] = useState(false);
+
+  const [legacySubscriptions, setLegacySubscriptions] = useState([]);
+  const [legacyPage, setLegacyPage] = useState(0);
+  const [legacyRowsPerPage, setLegacyRowsPerPage] = useState(20);
+  const [legacyTotal, setLegacyTotal] = useState(0);
+  const [legacyLoading, setLegacyLoading] = useState(false);
+
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [selectedSubscription, setSelectedSubscription] = useState(null);
+
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
+
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
   };
 
-  const lastElementRef = useCallback(
-    (node) => {
-      if (loading || loadingMore) return;
-      if (observer.current) observer.current.disconnect();
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setSnackbarOpen(false);
+  };
 
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          loadMoreSubscriptions();
-        }
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    if (newValue === 0) setPage(0);
+    else if (newValue === 1) setPendingPage(0);
+    else if (newValue === 2) setLegacyPage(0);
+  };
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const typesData = await getSubscriptionTypes();
+        setSubscriptionTypes(typesData);
+      } catch (err) {
+        console.error("Error fetching subscription types:", err);
+        showSnackbar("Failed to load subscription types", "error");
+      }
+      try {
+        const sourcesData = await getSubscriptionSources();
+        setAvailableSources(sourcesData);
+      } catch (err) {
+        console.error("Error fetching subscription sources:", err);
+        showSnackbar("Failed to load subscription sources", "error");
+      }
+    };
+    fetchInitialData();
+  }, []); // لا نضيف showSnackbar هنا لتجنب إعادة الجلب عند كل عرض لـ Snackbar
+
+  const fetchCounts = useCallback(async () => {
+    try {
+      const pendingData = await getPendingSubscriptions({
+        status: "pending",
+        page: 1,
+        page_size: 1,
       });
-
-      if (node) observer.current.observe(node);
-    },
-    [loading, loadingMore, hasMore]
-  );
-
-  const loadMoreSubscriptions = () => {
-    if (!hasMore || loadingMore) return;
-    setLoadingMore(true);
-    setFilters((prev) => ({ ...prev, page: prev.page + 1 }));
-  };
-
-  const fetchSubscriptions = useCallback(async () => {
-    const { page, page_size } = filters;
-    const isInitialLoad = page === 1;
-
-    if (isInitialLoad) {
-      setLoading(true);
-    } else {
-      setLoadingMore(true);
+      setPendingCount(pendingData.length > 0 ? pendingData[0].total_count || 0 : 0);
+    } catch (err) {
+      console.error("Error fetching pending counts:", err);
     }
-
     try {
-      const params = {
-        ...filters,
-        search: searchTerm,
-        subscription_type_id: activeTypeFilter,
-      };
-
-      const newSubscriptions = await getSubscriptions(params);
-
-      if (isInitialLoad) {
-        setSubscriptions(newSubscriptions);
-      } else {
-        if (newSubscriptions.length === 0) {
-          setHasMore(false);
-        } else {
-          setSubscriptions((prev) => [...prev, ...newSubscriptions]);
-        }
-      }
-
-      if (newSubscriptions.length < page_size) {
-        setHasMore(false);
-      }
-    } catch (error) {
-      console.error("Error fetching subscriptions:", error);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, [filters, searchTerm, activeTypeFilter]);
-
-  const fetchSubscriptionTypes = useCallback(async () => {
-    try {
-      const typesCacheKey = `subscriptionTypes`;
-      let types = sessionStorage.getItem(typesCacheKey);
-      if (types) {
-        types = JSON.parse(types);
-      } else {
-        types = await getSubscriptionTypes();
-        sessionStorage.setItem(typesCacheKey, JSON.stringify(types));
-      }
-      setSubscriptionTypes(types);
-    } catch (error) {
-      console.error("Error fetching subscription types:", error);
+      const legacyData = await getLegacySubscriptions({
+        processed: "false",
+        page: 1,
+        page_size: 1,
+      });
+      setLegacyCount(legacyData.length > 0 ? legacyData[0].total_count || 0 : 0);
+    } catch (err) {
+      console.error("Error fetching legacy counts:", err);
     }
   }, []);
 
   useEffect(() => {
-    fetchSubscriptionTypes();
-  }, [fetchSubscriptionTypes]);
+    fetchCounts();
+  }, [fetchCounts]);
+
+  const fetchSubscriptions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const queryParams = {
+        page: page + 1,
+        page_size: rowsPerPage,
+        search: searchTerm,
+        ordering: `${order === "desc" ? "-" : ""}${orderBy}`,
+        ...filters,
+      };
+      Object.keys(queryParams).forEach((key) => {
+        if (
+          queryParams[key] === "" ||
+          queryParams[key] === null ||
+          queryParams[key] === undefined
+        ) {
+          delete queryParams[key];
+        }
+        if (key === "startDate" && queryParams[key]) {
+          queryParams[key] = queryParams[key].toISOString().split("T")[0];
+        }
+        if (key === "endDate" && queryParams[key]) {
+          queryParams[key] = queryParams[key].toISOString().split("T")[0];
+        }
+      });
+
+      const data = await getSubscriptions(queryParams);
+      setSubscriptions(data);
+      setTotalSubscriptions(
+        data.length > 0 && data[0].total_count !== undefined ? data[0].total_count : data.length
+      );
+    } catch (err) {
+      console.error("Error fetching subscriptions:", err);
+      setError("Failed to load subscriptions. Please try again.");
+      showSnackbar(`Error: ${err.message || "Could not fetch subscriptions."}`, "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, rowsPerPage, searchTerm, filters, order, orderBy]); // showSnackbar ليست ضرورية هنا لأنها لا تغير منطق الجلب
+
+  const fetchPendingSubscriptions = useCallback(async () => {
+    setPendingLoading(true);
+    try {
+      const queryParams = {
+        page: pendingPage + 1,
+        page_size: pendingRowsPerPage,
+        status: "pending",
+      };
+      const data = await getPendingSubscriptions(queryParams);
+      setPendingSubscriptions(data);
+      setPendingTotal(
+        data.length > 0 && data[0].total_count !== undefined ? data[0].total_count : data.length
+      );
+    } catch (err) {
+      console.error("Error fetching pending subscriptions:", err);
+      showSnackbar(`Error: ${err.message || "Could not fetch pending subscriptions."}`, "error");
+    } finally {
+      setPendingLoading(false);
+    }
+  }, [pendingPage, pendingRowsPerPage]); // showSnackbar
+
+  const fetchLegacySubscriptions = useCallback(async () => {
+    setLegacyLoading(true);
+    try {
+      const queryParams = {
+        page: legacyPage + 1,
+        page_size: legacyRowsPerPage,
+        processed: "false",
+      };
+      const data = await getLegacySubscriptions(queryParams);
+      setLegacySubscriptions(data);
+      setLegacyTotal(
+        data.length > 0 && data[0].total_count !== undefined ? data[0].total_count : data.length
+      );
+    } catch (err) {
+      console.error("Error fetching legacy subscriptions:", err);
+      showSnackbar(`Error: ${err.message || "Could not fetch legacy subscriptions."}`, "error");
+    } finally {
+      setLegacyLoading(false);
+    }
+  }, [legacyPage, legacyRowsPerPage]); // showSnackbar
 
   useEffect(() => {
-    fetchSubscriptions();
-  }, [fetchSubscriptions]);
+    if (activeTab === 0) {
+      fetchSubscriptions();
+    } else if (activeTab === 1) {
+      fetchPendingSubscriptions();
+    } else if (activeTab === 2) {
+      fetchLegacySubscriptions();
+    }
+  }, [activeTab, fetchSubscriptions, fetchPendingSubscriptions, fetchLegacySubscriptions]);
 
-  const handleRefresh = () => {
-    // مسح التخزين المؤقت
-    sessionStorage.removeItem(`subscriptionTypes`);
-
-    // إعادة تعيين الحالة وجلب البيانات
-    setSubscriptions([]);
-    setFilters({
-      page: 1,
-      page_size: 10,
-      sort_by: "created_at",
-      sort_order: "desc",
-      active_only: false,
-    });
-    setHasMore(true);
-    setActiveTypeFilter(null);
-
-    fetchSubscriptionTypes();
-    fetchSubscriptions();
+  // ٢. إنشاء دالة معالج النقر لزر التحديث
+  const handleRefreshData = async () => {
+    showSnackbar("Refreshing data...", "info");
+    // لا حاجة لإعادة تعيين الصفحة هنا، نريد تحديث البيانات الحالية
+    if (activeTab === 0) {
+      await fetchSubscriptions();
+    } else if (activeTab === 1) {
+      await fetchPendingSubscriptions();
+    } else if (activeTab === 2) {
+      await fetchLegacySubscriptions();
+    }
+    await fetchCounts(); // تحديث الأعداد أيضًا
+    showSnackbar("Data refreshed!", "success");
   };
 
-  const subscriptionTypesMap = subscriptionTypes.reduce((acc, type) => {
-    acc[type.id] = type;
-    return acc;
-  }, {});
-
-  const groupedSubscriptions = subscriptions.reduce((acc, sub) => {
-    const typeId = sub.subscription_type_id;
-    if (!acc[typeId]) acc[typeId] = [];
-    acc[typeId].push(sub);
-    return acc;
-  }, {});
-
-  const columns = [
-    { Header: "Full Name", accessor: "full_name", align: "left" },
-    { Header: "Username", accessor: "username", align: "left" },
-    { Header: "Telegram ID", accessor: "telegram_id", align: "left" },
-    { Header: "Subscription Plan", accessor: "subscription_plan_name", align: "left" },
-    { Header: "Status", accessor: "status", align: "center" },
-    { Header: "Expiry Date", accessor: "expiry_date", align: "center" },
-    { Header: "Actions", accessor: "actions", align: "center" },
-  ];
-
-  const createRows = (sub, index, arr) => ({
-    full_name: sub.full_name,
-    username: sub.username,
-    telegram_id: sub.telegram_id,
-    subscription_plan_name: sub.subscription_plan_name,
-    status: (
-      <Chip
-        label={sub.is_active ? "Active" : "Inactive"}
-        color={sub.is_active ? "success" : "error"}
-        size="small"
-      />
-    ),
-    expiry_date: format(new Date(sub.expiry_date), "dd/MM/yyyy HH:mm"),
-    actions: (
-      <MDBox display="flex" justifyContent="center">
-        <Tooltip title="Edit Subscription">
-          <IconButton
-            aria-label="edit"
-            color="info"
-            size="small"
-            onClick={() => handleEdit(sub)}
-            sx={{ mr: 1 }}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        {/* تمت إزالة أي أزرار أو وظائف تتعلق بالحذف */}
-      </MDBox>
-    ),
-    ref: index === arr.length - 1 ? lastElementRef : null,
-  });
-
-  const handleEdit = (subscription) => {
-    setIsEditMode(true);
-    setModalInitialValues(subscription);
-    setModalOpen(true);
+  const handleSearch = (searchValue) => {
+    setSearchTerm(searchValue);
+    setPage(0);
   };
 
-  const handleAdd = () => {
-    setIsEditMode(false);
-    setModalInitialValues({});
-    setModalOpen(true);
+  const handleFilter = (filterValues) => {
+    const processedFilters = { ...filterValues };
+    if (processedFilters.startDate) {
+      processedFilters.startDate =
+        processedFilters.startDate.isSameOrAfter(processedFilters.endDate, "day") &&
+        processedFilters.endDate
+          ? processedFilters.endDate.subtract(1, "day")
+          : processedFilters.startDate;
+    }
+    if (
+      processedFilters.endDate &&
+      processedFilters.startDate &&
+      processedFilters.endDate.isBefore(processedFilters.startDate, "day")
+    ) {
+      processedFilters.endDate = processedFilters.startDate.add(1, "day");
+      showSnackbar("End date cannot be before start date. Adjusted end date.", "warning");
+    }
+    setFilters(processedFilters);
+    setPage(0);
   };
 
-  const handleModalClose = () => {
-    setModalOpen(false);
+  const handleRequestSort = (event, property) => {
+    const isAsc = orderBy === property && order === "asc";
+    setOrder(isAsc ? "desc" : "asc");
+    setOrderBy(property);
+    setPage(0);
   };
 
-  const handleModalSubmit = async (formData) => {
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const handleAddNewClick = () => {
+    setSelectedSubscription(null);
+    setFormModalOpen(true);
+  };
+
+  const handleEditClick = (subscription) => {
+    setSelectedSubscription(subscription);
+    setFormModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setFormModalOpen(false);
+    setSelectedSubscription(null);
+  };
+
+  const handleFormSubmit = async (formData) => {
+    const isEditMode = !!selectedSubscription;
+    // استخدام متغيرات loading محددة لكل تبويب إذا أردت
+    const currentLoadingSetter =
+      activeTab === 0 ? setLoading : activeTab === 1 ? setPendingLoading : setLegacyLoading;
+
+    currentLoadingSetter(true);
     try {
       if (isEditMode) {
-        const updated = await updateSubscription(modalInitialValues.id, formData);
-        setSubscriptions((prev) => prev.map((sub) => (sub.id === updated.id ? updated : sub)));
+        await updateSubscription(selectedSubscription.id, formData);
+        showSnackbar("Subscription updated successfully!", "success");
       } else {
-        const added = await addSubscription(formData);
-        setSubscriptions((prev) => [added, ...prev]);
+        await addSubscription(formData);
+        showSnackbar("Subscription added successfully!", "success");
       }
-      setModalOpen(false);
-    } catch (error) {
-      console.error("Error submitting form:", error);
-      alert("حدث خطأ أثناء معالجة العملية");
+      handleCloseModal();
+      // إعادة جلب بيانات التبويب النشط
+      if (activeTab === 0) await fetchSubscriptions();
+      else if (activeTab === 1) await fetchPendingSubscriptions();
+      else if (activeTab === 2) await fetchLegacySubscriptions();
+
+      await fetchCounts();
+    } catch (err) {
+      console.error("Error submitting form:", err);
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.message ||
+        (isEditMode ? "Error updating subscription" : "Error adding subscription");
+      showSnackbar(errorMessage, "error");
+    } finally {
+      currentLoadingSetter(false);
     }
   };
 
-  const handleExportModalOpen = () => {
-    setExportModalOpen(true);
+  const handlePendingPageChange = (event, newPage) => {
+    setPendingPage(newPage);
   };
 
-  const handleExportModalClose = () => {
-    setExportModalOpen(false);
+  const handlePendingRowsPerPageChange = (event) => {
+    setPendingRowsPerPage(parseInt(event.target.value, 10));
+    setPendingPage(0);
   };
 
-  const handleFilterClick = (event) => {
-    setFilterMenuAnchor(event.currentTarget);
+  const handleApprove = async (id) => {
+    setPendingLoading(true);
+    try {
+      await handlePendingSubscriptionAction(id, "approve");
+      showSnackbar("Subscription approved successfully!", "success");
+      await fetchPendingSubscriptions();
+      await fetchCounts();
+      if (activeTab === 0) await fetchSubscriptions();
+    } catch (err) {
+      console.error("Error approving subscription:", err);
+      showSnackbar(err.response?.data?.detail || "Error approving subscription", "error");
+    } finally {
+      setPendingLoading(false);
+    }
   };
 
-  const handleFilterClose = () => {
-    setFilterMenuAnchor(null);
+  const handleReject = async (id) => {
+    setPendingLoading(true);
+    try {
+      await handlePendingSubscriptionAction(id, "reject");
+      showSnackbar("Subscription rejected successfully!", "info");
+      await fetchPendingSubscriptions();
+      await fetchCounts();
+    } catch (err) {
+      console.error("Error rejecting subscription:", err);
+      showSnackbar(err.response?.data?.detail || "Error rejecting subscription", "error");
+    } finally {
+      setPendingLoading(false);
+    }
   };
 
-  const handleTypeFilter = (typeId) => {
-    setActiveTypeFilter(activeTypeFilter === typeId ? null : typeId);
-    setFilterMenuAnchor(null);
-    setSubscriptions([]);
-    setFilters((prev) => ({ ...prev, page: 1 }));
-    setHasMore(true);
+  const handleLegacyPageChange = (event, newPage) => {
+    setLegacyPage(newPage);
   };
 
-  const handleToggleActiveOnly = () => {
-    setFilters((prev) => ({ ...prev, active_only: !prev.active_only, page: 1 }));
-    setSubscriptions([]);
-    setHasMore(true);
-    setFilterMenuAnchor(null);
+  const handleLegacyRowsPerPageChange = (event) => {
+    setLegacyRowsPerPage(parseInt(event.target.value, 10));
+    setLegacyPage(0);
   };
 
-  const handleSortChange = (sortField) => {
-    setFilters((prev) => ({
-      ...prev,
-      sort_by: sortField,
-      sort_order: prev.sort_by === sortField && prev.sort_order === "desc" ? "asc" : "desc",
-      page: 1,
-    }));
-    setSubscriptions([]);
-    setHasMore(true);
-    setFilterMenuAnchor(null);
-  };
+  // لتحديد ما إذا كان أي نوع من التحميل نشطًا
+  const isAnyLoading = loading || pendingLoading || legacyLoading;
 
   return (
-    <DashboardLayout>
-      <DashboardNavbar onSearchChange={handleSearchChange} />
-      <MDBox pt={6} pb={3}>
-        <Grid container spacing={6}>
-          <Grid item xs={12}>
-            <Card>
-              <MDBox
-                mx={2}
-                mt={-3}
-                py={3}
-                px={2}
-                variant="gradient"
-                bgColor="info"
-                borderRadius="lg"
-                coloredShadow="info"
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-              >
-                <MDTypography variant="h6" color="white">
-                  Subscriptions Management
-                </MDTypography>
-                <MDBox display="flex" justifyContent="flex-end" alignItems="center" gap={1}>
-                  <Tooltip title="Refresh Data">
-                    <IconButton color="white" onClick={handleRefresh} size="small">
-                      <RefreshIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Filter Options">
-                    <IconButton color="white" onClick={handleFilterClick} size="small">
-                      <FilterListIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Menu
-                    anchorEl={filterMenuAnchor}
-                    open={Boolean(filterMenuAnchor)}
-                    onClose={handleFilterClose}
-                    TransitionComponent={Fade}
-                  >
-                    <MenuItem onClick={handleToggleActiveOnly}>
-                      {filters.active_only ? "Show All Subscriptions" : "Show Active Only"}
-                    </MenuItem>
-                    <MenuItem onClick={() => handleSortChange("expiry_date")}>
-                      Sort by{" "}
-                      {filters.sort_by === "expiry_date" && filters.sort_order === "desc"
-                        ? "Oldest"
-                        : "Latest"}{" "}
-                      Expiry
-                    </MenuItem>
-                    <MenuItem onClick={() => handleSortChange("created_at")}>
-                      Sort by{" "}
-                      {filters.sort_by === "created_at" && filters.sort_order === "desc"
-                        ? "Oldest"
-                        : "Latest"}{" "}
-                      Created
-                    </MenuItem>
-                    {subscriptionTypes.map((type) => (
-                      <MenuItem
-                        key={type.id}
-                        onClick={() => handleTypeFilter(type.id)}
-                        selected={activeTypeFilter === type.id}
-                      >
-                        {activeTypeFilter === type.id ? `✓ ${type.name}` : type.name}
-                      </MenuItem>
-                    ))}
-                  </Menu>
-                  <MDButton
-                    variant="gradient"
-                    color="secondary"
-                    onClick={handleExportModalOpen}
-                    size="small"
-                  >
-                    Export
-                  </MDButton>
-                  <MDButton variant="gradient" color="success" onClick={handleAdd} size="small">
-                    Add New
-                  </MDButton>
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <DashboardLayout>
+        <DashboardNavbar />
+        <MDBox pt={6} pb={3}>
+          {" "}
+          {/* هذا هو MDBox الخارجي */}
+          <Grid container spacing={6}>
+            {" "}
+            {/* فتح Grid container */}
+            <Grid item xs={12}>
+              {" "}
+              {/* فتح Grid item */}
+              <Card>
+                <MDBox
+                  mx={2}
+                  mt={-3}
+                  py={3}
+                  px={2}
+                  variant="gradient"
+                  bgColor="info"
+                  borderRadius="lg"
+                  coloredShadow="info"
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
+                  <MDTypography variant="h6" color="white">
+                    Subscriptions Management {/* تم التعديل في الرد السابق، كان Manager */}
+                  </MDTypography>
                 </MDBox>
-              </MDBox>
-              <MDBox pt={3}>
-                {loading && subscriptions.length === 0 ? (
-                  <MDBox display="flex" flexDirection="column" gap={2} p={3}>
-                    {[...Array(5)].map((_, i) => (
-                      <MDBox key={i}>
-                        <Skeleton variant="rectangular" height={40} sx={{ mb: 1 }} />
-                        <Skeleton variant="rectangular" height={200} />
-                      </MDBox>
-                    ))}
-                  </MDBox>
-                ) : subscriptions.length === 0 ? (
-                  <MDBox display="flex" justifyContent="center" alignItems="center" py={8}>
-                    <MDTypography variant="h5" color="text">
-                      No subscriptions found
-                    </MDTypography>
-                  </MDBox>
-                ) : (
+
+                <MDBox
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  px={2}
+                  pt={1}
+                >
+                  <TabsManager
+                    activeTab={activeTab}
+                    handleTabChange={handleTabChange}
+                    pendingCount={pendingCount}
+                    legacyCount={legacyCount}
+                  />
+                  <Tooltip title="Refresh Data">
+                    <IconButton onClick={handleRefreshData} color="info" disabled={isAnyLoading}>
+                      {isAnyLoading &&
+                      ((activeTab === 0 && loading) ||
+                        (activeTab === 1 && pendingLoading) ||
+                        (activeTab === 2 && legacyLoading)) ? (
+                        <CircularProgress size={24} color="inherit" />
+                      ) : (
+                        <RefreshIcon />
+                      )}
+                    </IconButton>
+                  </Tooltip>
+                </MDBox>
+
+                {activeTab === 0 && (
                   <>
-                    {activeTypeFilter ? (
-                      <MDBox mb={4}>
-                        <MDBox
-                          px={2}
-                          pb={1}
-                          display="flex"
-                          justifyContent="space-between"
-                          alignItems="center"
+                    <SubscriptionTableToolbar
+                      onSearch={handleSearch}
+                      onFilter={handleFilter}
+                      subscriptionTypes={subscriptionTypes}
+                      onAddNewClick={handleAddNewClick}
+                      availableSources={availableSources}
+                    />
+                    {error && !loading && (
+                      <MDBox px={3} py={1}>
+                        <MuiAlert
+                          severity="error"
+                          onClose={() => setError(null)}
+                          sx={{ width: "100%" }}
                         >
-                          <MDTypography variant="h6" fontWeight="bold">
-                            {subscriptionTypesMap[activeTypeFilter]?.name ||
-                              "Filtered Subscriptions"}
-                          </MDTypography>
-                          <Chip
-                            label="Clear Filter"
-                            color="info"
-                            size="small"
-                            onClick={() => handleTypeFilter(null)}
-                            sx={{ cursor: "pointer" }}
-                          />
-                        </MDBox>
-                        <DataTable
-                          table={{
-                            columns,
-                            rows: subscriptions.map((sub, i, arr) => createRows(sub, i, arr)),
-                          }}
-                          isSorted={false}
-                          entriesPerPage={false}
-                          showTotalEntries={false}
-                          noEndBorder
-                        />
+                          {error}
+                        </MuiAlert>
+                      </MDBox>
+                    )}
+                    <SubscriptionTable
+                      subscriptions={subscriptions}
+                      page={page}
+                      rowsPerPage={rowsPerPage}
+                      onPageChange={handleChangePage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      onEditClick={handleEditClick}
+                      totalCount={totalSubscriptions}
+                      order={order}
+                      orderBy={orderBy}
+                      onRequestSort={handleRequestSort}
+                      loading={loading}
+                    />
+                  </>
+                )}
+
+                {activeTab === 1 && (
+                  <>
+                    {pendingLoading && pendingSubscriptions.length === 0 ? (
+                      <MDBox display="flex" justifyContent="center" p={5}>
+                        <CircularProgress />
                       </MDBox>
                     ) : (
-                      Object.entries(groupedSubscriptions).map(([typeId, subs]) => {
-                        const type = subscriptionTypesMap[typeId];
-                        const rows = subs.map((sub, i, arr) => createRows(sub, i, arr));
-                        return (
-                          <MDBox key={typeId} mb={4}>
-                            <MDBox px={2} pb={1}>
-                              <MDTypography variant="h6" fontWeight="bold">
-                                {type ? type.name : "Unknown Subscription Type"}
-                              </MDTypography>
-                            </MDBox>
-                            <DataTable
-                              table={{ columns, rows }}
-                              isSorted={false}
-                              entriesPerPage={false}
-                              showTotalEntries={false}
-                              noEndBorder
-                            />
-                          </MDBox>
-                        );
-                      })
-                    )}
-
-                    {loadingMore && (
-                      <MDBox display="flex" justifyContent="center" py={2}>
-                        <CircularProgress size={30} />
-                      </MDBox>
-                    )}
-
-                    {!hasMore && subscriptions.length > 0 && (
-                      <MDBox textAlign="center" py={2}>
-                        <MDTypography variant="body2" color="text">
-                          No more subscriptions to load
-                        </MDTypography>
-                      </MDBox>
+                      <PendingSubscriptionsTable
+                        pendingSubscriptions={pendingSubscriptions}
+                        page={pendingPage}
+                        rowsPerPage={pendingRowsPerPage}
+                        onPageChange={handlePendingPageChange}
+                        onRowsPerPageChange={handlePendingRowsPerPageChange}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                        totalCount={pendingTotal}
+                        loading={pendingLoading}
+                      />
                     )}
                   </>
                 )}
-              </MDBox>
-            </Card>
-          </Grid>
-        </Grid>
-      </MDBox>
 
-      <SubscriptionFormModal
-        open={modalOpen}
-        onClose={handleModalClose}
-        onSubmit={handleModalSubmit}
-        initialValues={modalInitialValues}
-        subscriptionTypes={subscriptionTypes}
-        isEdit={isEditMode}
-      />
-
-      <ExportModal
-        open={exportModalOpen}
-        onClose={handleExportModalClose}
-        onSubmit={handleExportSubscriptions}
-        subscriptionTypes={subscriptionTypes}
-      />
-    </DashboardLayout>
+                {activeTab === 2 && (
+                  <>
+                    {legacyLoading && legacySubscriptions.length === 0 ? (
+                      <MDBox display="flex" justifyContent="center" p={5}>
+                        <CircularProgress />
+                      </MDBox>
+                    ) : (
+                      <LegacySubscriptionsTable
+                        legacySubscriptions={legacySubscriptions}
+                        page={legacyPage}
+                        rowsPerPage={legacyRowsPerPage}
+                        onPageChange={handleLegacyPageChange}
+                        onRowsPerPageChange={handleLegacyRowsPerPageChange}
+                        totalCount={legacyTotal}
+                        loading={legacyLoading}
+                      />
+                    )}
+                  </>
+                )}
+              </Card>{" "}
+              {/* إغلاق Card */}
+            </Grid>{" "}
+            {/* <== إضافة إغلاق Grid item */}
+          </Grid>{" "}
+          {/* <== إضافة إغلاق Grid container */}
+        </MDBox>{" "}
+        {/* إغلاق MDBox الخارجي (السطر الذي كان يشير إليه الخطأ) */}
+        <SubscriptionFormModal
+          open={formModalOpen}
+          onClose={handleCloseModal}
+          onSubmit={handleFormSubmit}
+          initialValues={selectedSubscription}
+          subscriptionTypes={subscriptionTypes}
+          availableSources={availableSources}
+          isEdit={!!selectedSubscription}
+        />
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        >
+          <CustomAlert
+            onClose={handleCloseSnackbar}
+            severity={snackbarSeverity}
+            sx={{ width: "100%" }}
+          >
+            {snackbarMessage}
+          </CustomAlert>
+        </Snackbar>
+        <Footer />
+      </DashboardLayout>
+    </LocalizationProvider>
   );
 }
 
-export default Table;
+export default Tables;

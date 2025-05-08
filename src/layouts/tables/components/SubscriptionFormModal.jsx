@@ -1,12 +1,19 @@
-// layouts/tables/components/SubscriptionFormModal.jsx
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Grid } from "@mui/material";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+  Grid,
+  TextField,
+} from "@mui/material";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-import MDBox from "components/MDBox";
 
 const SubscriptionFormModal = ({
   open,
@@ -14,6 +21,7 @@ const SubscriptionFormModal = ({
   onSubmit,
   initialValues = {},
   subscriptionTypes = [],
+  availableSources = [], // ستبقى هذه الخاصية لتعبئة القائمة في حال أردت تغيير المنطق مستقبلاً
   isEdit = false,
 }) => {
   const [formData, setFormData] = useState({
@@ -22,63 +30,77 @@ const SubscriptionFormModal = ({
     username: "",
     subscription_type_id: "",
     expiry_date: null,
+    source: "", // القيمة الأولية فارغة
   });
 
   useEffect(() => {
     if (open) {
-      if (initialValues && Object.keys(initialValues).length > 0) {
+      if (isEdit && initialValues && Object.keys(initialValues).length > 0) {
+        // تعديل: التحقق من isEdit هنا
         setFormData({
           telegram_id: initialValues.telegram_id || "",
           full_name: initialValues.full_name || "",
           username: initialValues.username || "",
           subscription_type_id: initialValues.subscription_type_id || "",
-          expiry_date: initialValues.expiry_date ? new Date(initialValues.expiry_date) : null,
+          expiry_date: initialValues.expiry_date ? dayjs(initialValues.expiry_date) : null,
+          source: initialValues.source || "", // استخدام المصدر الحالي للاشتراك
         });
       } else {
+        // وضع الإضافة
         setFormData({
           telegram_id: "",
           full_name: "",
           username: "",
           subscription_type_id: "",
           expiry_date: null,
+          source: "manual", // القيمة الافتراضية للمصدر عند الإضافة
         });
       }
     }
-  }, [initialValues, open]);
+  }, [initialValues, open, isEdit]); // إضافة isEdit إلى مصفوفة الاعتماديات
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleDateChange = (date) => {
-    setFormData({ ...formData, expiry_date: date });
+  const handleDateChange = (newDate) => {
+    setFormData({ ...formData, expiry_date: newDate });
   };
 
   const handleSubmit = () => {
+    const expiryDateISO = formData.expiry_date
+      ? formData.expiry_date
+          .set("hour", 0)
+          .set("minute", 0)
+          .set("second", 1)
+          .set("millisecond", 600)
+          .toISOString()
+      : null;
+
     if (
       !formData.telegram_id ||
       !formData.full_name ||
-      !formData.username ||
-      !formData.subscription_type_id ||
-      !formData.expiry_date
+      !formData.username || // حتى لو معطل، يجب أن تكون له قيمة
+      !formData.subscription_type_id || // حتى لو معطل، يجب أن تكون له قيمة
+      !expiryDateISO ||
+      !formData.source // حتى لو معطل، يجب أن تكون له قيمة
     ) {
-      alert("Please fill in all required fields.");
+      alert("Please fill in all required fields, including a valid expiry date.");
       return;
     }
-    const date = new Date(formData.expiry_date);
-    date.setHours(0, 0, 1, 600);
+
     const processedData = {
       ...formData,
-      expiry_date: date.toISOString(),
+      expiry_date: expiryDateISO,
     };
     onSubmit(processedData);
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
         <DialogTitle>
-          <MDTypography variant="h5" fontWeight="bold" color="dark">
+          <MDTypography component="div" variant="h5" fontWeight="bold" color="dark">
             {isEdit ? "Edit Subscription" : "Add New Subscription"}
           </MDTypography>
         </DialogTitle>
@@ -93,7 +115,7 @@ const SubscriptionFormModal = ({
                 value={formData.telegram_id}
                 onChange={handleChange}
                 required
-                disabled={isEdit} // أضف هذا السطر
+                disabled={isEdit}
               />
             </Grid>
             <Grid item xs={12}>
@@ -105,6 +127,7 @@ const SubscriptionFormModal = ({
                 value={formData.full_name}
                 onChange={handleChange}
                 required
+                // Full Name قابل للتعديل دائماً
               />
             </Grid>
             <Grid item xs={12}>
@@ -114,9 +137,9 @@ const SubscriptionFormModal = ({
                 type="text"
                 fullWidth
                 value={formData.username}
-                onChange={handleChange}
+                onChange={handleChange} // يبقى onChange للسماح بالتعبئة الأولية
                 required
-                disabled={isEdit} // أضف هذا السطر
+                disabled={isEdit} // تعديل: تعطيل في وضع التعديل
               />
             </Grid>
             <Grid item xs={12}>
@@ -126,9 +149,9 @@ const SubscriptionFormModal = ({
                 name="subscription_type_id"
                 fullWidth
                 value={formData.subscription_type_id}
-                onChange={handleChange}
+                onChange={handleChange} // يبقى onChange للسماح بالتعبئة الأولية
                 required
-                disabled={isEdit}
+                disabled={isEdit} // تعديل: تعطيل في وضع التعديل
                 SelectProps={{
                   MenuProps: {
                     MenuListProps: {
@@ -140,11 +163,11 @@ const SubscriptionFormModal = ({
                   },
                 }}
                 InputLabelProps={{
-                  style: { fontWeight: "bold" },
+                  shrink: true,
                 }}
               >
                 <MenuItem value="" disabled>
-                  Select Subscription Type
+                  <em>Select Subscription Type</em>
                 </MenuItem>
                 {subscriptionTypes.map((type) => (
                   <MenuItem
@@ -158,11 +181,75 @@ const SubscriptionFormModal = ({
               </MDInput>
             </Grid>
             <Grid item xs={12}>
+              <MDInput
+                select
+                label="Source"
+                name="source"
+                fullWidth
+                value={formData.source} // سيتم تعيينه إلى "manual" في وضع الإضافة
+                onChange={handleChange} // يبقى onChange للسماح بالتعبئة الأولية
+                required
+                disabled={true} // تعديل: تعطيل دائمًا (سواء إضافة أو تعديل)
+                // في وضع الإضافة، قيمته "manual"
+                // في وضع التعديل، قيمته هي المصدر الحالي للاشتراك
+                SelectProps={{
+                  MenuProps: {
+                    MenuListProps: {
+                      sx: {
+                        paddingTop: "4px",
+                        paddingBottom: "4px",
+                      },
+                    },
+                  },
+                }}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              >
+                {/* لا نحتاج إلى خيار "Select Source" إذا كان الحقل معطلاً وقيمته محددة */}
+                {/* عرض القيمة الحالية فقط */}
+                {isEdit && formData.source && (
+                  <MenuItem key={formData.source} value={formData.source}>
+                    {formData.source}
+                  </MenuItem>
+                )}
+                {!isEdit && (
+                  <MenuItem key="manual" value="manual">
+                    Manual
+                  </MenuItem>
+                )}
+                {/* إذا أردت عرض قائمة المصادر في وضع التعديل (حتى لو معطل)، يمكنك ترك الكود التالي */}
+                {/* ولكن بما أنه معطل، المستخدم لن يتمكن من الاختيار */}
+                {/* {isEdit && Array.isArray(availableSources) && availableSources.length > 0 ? (
+                  availableSources.map((sourceOption) => (
+                    <MenuItem
+                      key={sourceOption}
+                      value={sourceOption}
+                      sx={{ paddingTop: "8px", paddingBottom: "8px" }}
+                    >
+                      {sourceOption}
+                    </MenuItem>
+                  ))
+                ) : null} */}
+              </MDInput>
+            </Grid>
+            <Grid item xs={12}>
               <DatePicker
                 label="Expiry Date"
                 value={formData.expiry_date}
                 onChange={handleDateChange}
-                renderInput={(params) => <MDInput fullWidth {...params} />}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    required
+                    variant="standard"
+                    InputLabelProps={{
+                      ...params.InputLabelProps,
+                      shrink: true,
+                    }}
+                  />
+                )}
               />
             </Grid>
           </Grid>

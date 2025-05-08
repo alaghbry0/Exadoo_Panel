@@ -3,7 +3,7 @@ import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
 
-const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
+const API_BASE_URL = "http://localhost:5000";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
@@ -457,4 +457,80 @@ export const fetchReminderSettings = () => {
   return axios.get(`${API_BASE_URL}/api/admin/admin/reminder-settings`, {
     headers: getAuthHeaders(),
   });
+};
+
+/**
+ * جلب مصادر الاشتراكات المتاحة
+ */
+export const getSubscriptionSources = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/subscription_sources`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * جلب الاشتراكات المعلقة
+ */
+export const getPendingSubscriptions = async (filters = {}) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/pending_subscriptions`, {
+      headers: getAuthHeaders(),
+      params: filters,
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * إجراءات على الاشتراكات المعلقة (قبول/رفض)
+ */
+export const handlePendingSubscriptionAction = async (id, action) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/pending_subscriptions/${id}/action`,
+      { action },
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * جلب الاشتراكات القديمة
+ */
+export const getLegacySubscriptions = async (filters = {}) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/legacy_subscriptions`, {
+      headers: getAuthHeaders(),
+      params: filters,
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * معالجة الاشتراكات القديمة
+ */
+export const processLegacySubscription = async (id) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/legacy_subscriptions/${id}/process`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
