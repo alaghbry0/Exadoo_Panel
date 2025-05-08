@@ -518,19 +518,3 @@ export const getLegacySubscriptions = async (filters = {}) => {
     throw error;
   }
 };
-
-/**
- * معالجة الاشتراكات القديمة
- */
-export const processLegacySubscription = async (id) => {
-  try {
-    const response = await axios.post(
-      `${API_BASE_URL}/api/admin/legacy_subscriptions/${id}/process`,
-      {},
-      { headers: getAuthHeaders() }
-    );
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};

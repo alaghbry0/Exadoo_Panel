@@ -48,7 +48,7 @@ const TabsManager = ({ activeTab, handleTabChange, pendingCount = 0, legacyCount
           aria-label="Subscription tabs"
         >
           <Tab
-            label={tabLabelWithBadge("Active", 0, ListAltIcon)} // تمرير أيقونة
+            label={tabLabelWithBadge("Subscriptions", 0, ListAltIcon)} // تمرير أيقونة
             sx={{
               textTransform: "none", // لمنع تحويل النص إلى حروف كبيرة
               fontWeight: activeTab === 0 ? "bold" : 500, // خط أعرض للتبويب النشط
