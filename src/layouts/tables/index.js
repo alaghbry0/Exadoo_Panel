@@ -1,12 +1,27 @@
 // layouts/tables/index.js
 import React, { useState, useEffect, useCallback, forwardRef } from "react";
-// ١. استيراد IconButton و RefreshIcon
-import { Card, CircularProgress, Snackbar, IconButton, Tooltip, Grid } from "@mui/material";
+import {
+  Card,
+  CircularProgress,
+  Snackbar,
+  IconButton,
+  Tooltip,
+  Grid,
+  Box,
+  Chip as MuiChip,
+  TextField,
+  InputAdornment,
+} from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import SearchIcon from "@mui/icons-material/Search";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+
 import MuiAlert from "@mui/material/Alert";
 import MDBox from "components/MDBox";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
-import DashboardNavbar from "examples/Navbars/DashboardNavbar"; // يمكنك وضع الزر هنا أيضًا إذا أردت
+import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 import MDTypography from "components/MDTypography";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -18,11 +33,11 @@ import SubscriptionTableToolbar from "layouts/tables/components/SubscriptionTabl
 import SubscriptionTable from "layouts/tables/components/SubscriptionTable";
 import SubscriptionFormModal from "layouts/tables/components/SubscriptionFormModal";
 import PendingSubscriptionsTable from "layouts/tables/components/PendingSubscriptionsTable";
-import LegacySubscriptionsTable from "layouts/tables/components/LegacySubscriptionsTable";
+import LegacySubscriptionsTable from "layouts/tables/components/LegacySubscriptionsTable"; // النسخة التي تدعم Load More
 
 // Data
 import {
-  getSubscriptions,
+  getSubscriptions, // <--- سنركز على كيفية التعامل مع رد هذه الدالة
   getSubscriptionTypes,
   addSubscription,
   updateSubscription,
@@ -30,24 +45,27 @@ import {
   getPendingSubscriptions,
   handlePendingSubscriptionAction,
   getLegacySubscriptions,
+  getPendingSubscriptionsStats,
 } from "services/api";
 
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
 
+const ROWS_PER_PAGE_FOR_LOAD_MORE = 20;
+
 function Tables() {
   // State for tabs
   const [activeTab, setActiveTab] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [legacyCount, setLegacyCount] = useState(0);
+  const [legacyCountForTabDisplay, setLegacyCountForTabDisplay] = useState(0);
 
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
   const [availableSources, setAvailableSources] = useState([]);
 
+  // State for Subscriptions Tab (Pagination)
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null); // Error specific to Subscriptions Tab
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [totalSubscriptions, setTotalSubscriptions] = useState(0);
@@ -56,35 +74,39 @@ function Tables() {
   const [order, setOrder] = useState("desc");
   const [orderBy, setOrderBy] = useState("id");
 
+  // --- State for Pending Subscriptions Tab (Pagination) ---
   const [pendingSubscriptions, setPendingSubscriptions] = useState([]);
   const [pendingPage, setPendingPage] = useState(0);
   const [pendingRowsPerPage, setPendingRowsPerPage] = useState(20);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingStats, setPendingStats] = useState({ pending: 0, complete: 0, total_all: 0 });
+  const [currentPendingFilter, setCurrentPendingFilter] = useState("pending");
+  const [pendingSearchTerm, setPendingSearchTerm] = useState("");
 
-  const [legacySubscriptions, setLegacySubscriptions] = useState([]);
-  const [legacyPage, setLegacyPage] = useState(0);
-  const [legacyRowsPerPage, setLegacyRowsPerPage] = useState(20);
-  const [legacyTotal, setLegacyTotal] = useState(0);
-  const [legacyLoading, setLegacyLoading] = useState(false);
+  // --- State for Legacy Subscriptions Tab (Load More) ---
+  const [legacyInitialData, setLegacyInitialData] = useState([]);
+  const [legacyTotalCount, setLegacyTotalCount] = useState(0);
+  const [legacyLoadingInitial, setLegacyLoadingInitial] = useState(false);
+  const [activeLegacyFilter, setActiveLegacyFilter] = useState(null);
+  const [legacyOrder, setLegacyOrder] = useState("desc");
+  const [legacyOrderBy, setLegacyOrderBy] = useState("expiry_date");
 
+  // Modal and Snackbar state
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
-
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
 
-  const showSnackbar = (message, severity = "success") => {
+  const showSnackbar = useCallback((message, severity = "success") => {
     setSnackbarMessage(message);
     setSnackbarSeverity(severity);
     setSnackbarOpen(true);
-  };
+  }, []);
 
   const handleCloseSnackbar = (event, reason) => {
-    if (reason === "clickaway") {
-      return;
-    }
+    if (reason === "clickaway") return;
     setSnackbarOpen(false);
   };
 
@@ -92,216 +114,357 @@ function Tables() {
     setActiveTab(newValue);
     if (newValue === 0) setPage(0);
     else if (newValue === 1) setPendingPage(0);
-    else if (newValue === 2) setLegacyPage(0);
+    // No page reset needed for legacy tab (Load More)
   };
 
+  // Fetch Dropdown Data
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const typesData = await getSubscriptionTypes();
         setSubscriptionTypes(typesData);
-      } catch (err) {
-        console.error("Error fetching subscription types:", err);
-        showSnackbar("Failed to load subscription types", "error");
-      }
-      try {
         const sourcesData = await getSubscriptionSources();
         setAvailableSources(sourcesData);
       } catch (err) {
-        console.error("Error fetching subscription sources:", err);
-        showSnackbar("Failed to load subscription sources", "error");
+        console.error("Error fetching initial dropdown data:", err);
+        showSnackbar("Failed to load some initial data", "error");
       }
     };
     fetchInitialData();
-  }, []); // لا نضيف showSnackbar هنا لتجنب إعادة الجلب عند كل عرض لـ Snackbar
+  }, [showSnackbar]);
 
-  const fetchCounts = useCallback(async () => {
+  // --- Fetching Logic for Pending Tab ---
+  const fetchPendingStats = useCallback(async () => {
     try {
-      const pendingData = await getPendingSubscriptions({
-        status: "pending",
-        page: 1,
-        page_size: 1,
-      });
-      setPendingCount(pendingData.length > 0 ? pendingData[0].total_count || 0 : 0);
+      const statsData = await getPendingSubscriptionsStats();
+      setPendingStats(statsData || { pending: 0, complete: 0, total_all: 0 });
     } catch (err) {
-      console.error("Error fetching pending counts:", err);
-    }
-    try {
-      const legacyData = await getLegacySubscriptions({
-        processed: "false",
-        page: 1,
-        page_size: 1,
-      });
-      setLegacyCount(legacyData.length > 0 ? legacyData[0].total_count || 0 : 0);
-    } catch (err) {
-      console.error("Error fetching legacy counts:", err);
+      console.error("Error fetching pending subscriptions stats:", err);
     }
   }, []);
 
-  useEffect(() => {
-    fetchCounts();
-  }, [fetchCounts]);
-
-  const fetchSubscriptions = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const queryParams = {
-        page: page + 1,
-        page_size: rowsPerPage,
-        search: searchTerm,
-        ordering: `${order === "desc" ? "-" : ""}${orderBy}`,
-        ...filters,
-      };
-      Object.keys(queryParams).forEach((key) => {
-        if (
-          queryParams[key] === "" ||
-          queryParams[key] === null ||
-          queryParams[key] === undefined
-        ) {
-          delete queryParams[key];
-        }
-        if (key === "startDate" && queryParams[key]) {
-          queryParams[key] = queryParams[key].toISOString().split("T")[0];
-        }
-        if (key === "endDate" && queryParams[key]) {
-          queryParams[key] = queryParams[key].toISOString().split("T")[0];
-        }
-      });
-
-      const data = await getSubscriptions(queryParams);
-      setSubscriptions(data);
-      setTotalSubscriptions(
-        data.length > 0 && data[0].total_count !== undefined ? data[0].total_count : data.length
-      );
-    } catch (err) {
-      console.error("Error fetching subscriptions:", err);
-      setError("Failed to load subscriptions. Please try again.");
-      showSnackbar(`Error: ${err.message || "Could not fetch subscriptions."}`, "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, rowsPerPage, searchTerm, filters, order, orderBy]); // showSnackbar ليست ضرورية هنا لأنها لا تغير منطق الجلب
-
-  const fetchPendingSubscriptions = useCallback(async () => {
+  const fetchPendingSubscriptionsData = useCallback(async () => {
     setPendingLoading(true);
     try {
       const queryParams = {
         page: pendingPage + 1,
         page_size: pendingRowsPerPage,
-        status: "pending",
+        status: currentPendingFilter === "all" ? undefined : currentPendingFilter,
+        search: pendingSearchTerm || undefined,
       };
-      const data = await getPendingSubscriptions(queryParams);
-      setPendingSubscriptions(data);
-      setPendingTotal(
-        data.length > 0 && data[0].total_count !== undefined ? data[0].total_count : data.length
-      );
+      // Assume getPendingSubscriptions returns { data: [], total_count: N }
+      const responseData = await getPendingSubscriptions(queryParams);
+      setPendingSubscriptions(responseData.data || []);
+      setPendingTotal(responseData.total_count || 0);
     } catch (err) {
       console.error("Error fetching pending subscriptions:", err);
       showSnackbar(`Error: ${err.message || "Could not fetch pending subscriptions."}`, "error");
+      setPendingSubscriptions([]);
+      setPendingTotal(0);
     } finally {
       setPendingLoading(false);
     }
-  }, [pendingPage, pendingRowsPerPage]); // showSnackbar
+  }, [currentPendingFilter, pendingPage, pendingRowsPerPage, pendingSearchTerm, showSnackbar]);
 
-  const fetchLegacySubscriptions = useCallback(async () => {
-    setLegacyLoading(true);
+  // --- Fetching Logic for Subscriptions Tab (CORRECTED) ---
+  const fetchSubscriptions = useCallback(async () => {
+    setLoading(true);
+    setError(null); // Reset error specific to this tab
+    try {
+      let queryParams = {
+        page: page + 1,
+        page_size: rowsPerPage,
+        search: searchTerm || undefined,
+        ordering: `${order === "desc" ? "-" : ""}${orderBy}`,
+      };
+      const activeFilters = { ...filters };
+      Object.keys(activeFilters).forEach((key) => {
+        if (!activeFilters[key]) {
+          delete activeFilters[key];
+        }
+        if (
+          (key === "startDate" || key === "endDate") &&
+          activeFilters[key] &&
+          typeof activeFilters[key].toISOString === "function"
+        ) {
+          activeFilters[key] = activeFilters[key].toISOString().split("T")[0];
+        }
+      });
+      // Flatten filters into queryParams (adjust if your API expects nested 'filters' object)
+      queryParams = { ...queryParams, ...activeFilters };
+
+      console.log("[fetchSubscriptions] Query Params:", queryParams);
+      const responseData = await getSubscriptions(queryParams);
+      console.log("[fetchSubscriptions] API Response:", responseData);
+
+      let fetchedSubscriptions = [];
+      let fetchedTotalCount = 0;
+
+      // *** START: Handle potential response structures for getSubscriptions ***
+      if (Array.isArray(responseData)) {
+        // Case 1: API returns an array directly (e.g., with total_count in each item)
+        fetchedSubscriptions = responseData;
+        if (responseData.length > 0 && responseData[0].hasOwnProperty("total_count")) {
+          fetchedTotalCount = responseData[0].total_count;
+        } else {
+          // Fallback if total_count isn't provided per item
+          console.warn(
+            "[fetchSubscriptions] 'total_count' not found in array items. Pagination might be inaccurate."
+          );
+          // If no total_count, pagination might break. Consider fetching all or alternative approach.
+          fetchedTotalCount = responseData.length; // Setting total count to current length is often wrong for pagination
+        }
+        console.log(`[fetchSubscriptions] Handled as Array. Count: ${fetchedTotalCount}`);
+      } else if (
+        responseData &&
+        typeof responseData === "object" &&
+        responseData !== null &&
+        responseData.hasOwnProperty("data") &&
+        responseData.hasOwnProperty("total_count")
+      ) {
+        // Case 2: API returns an object { data: [], total_count: N } (Common pattern)
+        fetchedSubscriptions = responseData.data || [];
+        fetchedTotalCount = responseData.total_count || 0;
+        console.log(
+          `[fetchSubscriptions] Handled as Object {data, total_count}. Count: ${fetchedTotalCount}`
+        );
+      } else {
+        // Unexpected structure
+        console.error("[fetchSubscriptions] Unexpected API response structure:", responseData);
+        setError("Received unexpected data format from server for subscriptions.");
+      }
+      // *** END: Handle potential response structures ***
+
+      setSubscriptions(fetchedSubscriptions);
+      setTotalSubscriptions(fetchedTotalCount);
+    } catch (err) {
+      console.error("Error fetching subscriptions:", err);
+      const message = err.message || "Could not fetch subscriptions.";
+      setError(`Failed to load subscriptions: ${message}`); // Set specific error message
+      showSnackbar(`Error: ${message}`, "error"); // Show snackbar too
+      setSubscriptions([]);
+      setTotalSubscriptions(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, rowsPerPage, searchTerm, filters, order, orderBy, showSnackbar]); // Added showSnackbar back
+
+  // --- Fetching Logic for Legacy Tab (Load More) ---
+  const fetchLegacyCountForTabsManager = useCallback(async () => {
+    try {
+      const legacyResponse = await getLegacySubscriptions({ page: 1, page_size: 1 });
+      let count = 0;
+      if (Array.isArray(legacyResponse)) {
+        count =
+          legacyResponse.length > 0 && legacyResponse[0].total_count !== undefined
+            ? legacyResponse[0].total_count
+            : 0;
+      } else if (legacyResponse && legacyResponse.total_count !== undefined) {
+        count = legacyResponse.total_count;
+      }
+      setLegacyCountForTabDisplay(count);
+    } catch (err) {
+      console.error("Error fetching total legacy count for tab display:", err);
+    }
+  }, []); // Keep dependencies minimal
+
+  useEffect(() => {
+    fetchLegacyCountForTabsManager();
+  }, [fetchLegacyCountForTabsManager]);
+
+  const fetchInitialLegacySubscriptions = useCallback(async () => {
+    setLegacyLoadingInitial(true);
     try {
       const queryParams = {
-        page: legacyPage + 1,
-        page_size: legacyRowsPerPage,
-        processed: "false",
+        page: 1,
+        page_size: ROWS_PER_PAGE_FOR_LOAD_MORE,
+        ordering: `${legacyOrder === "desc" ? "-" : ""}${legacyOrderBy}`,
       };
-      const data = await getLegacySubscriptions(queryParams);
-      setLegacySubscriptions(data);
-      setLegacyTotal(
-        data.length > 0 && data[0].total_count !== undefined ? data[0].total_count : data.length
-      );
-    } catch (err) {
-      console.error("Error fetching legacy subscriptions:", err);
-      showSnackbar(`Error: ${err.message || "Could not fetch legacy subscriptions."}`, "error");
-    } finally {
-      setLegacyLoading(false);
-    }
-  }, [legacyPage, legacyRowsPerPage]); // showSnackbar
+      if (activeLegacyFilter !== null) queryParams.processed = activeLegacyFilter;
+      const responseData = await getLegacySubscriptions(queryParams);
 
+      let initialData = [];
+      let totalCount = 0;
+
+      if (Array.isArray(responseData)) {
+        initialData = responseData;
+        totalCount =
+          responseData.length > 0 && responseData[0].total_count !== undefined
+            ? responseData[0].total_count
+            : responseData.length; // Be careful with fallback
+      } else if (responseData && responseData.data && responseData.total_count !== undefined) {
+        initialData = responseData.data || [];
+        totalCount = responseData.total_count || 0;
+      } else {
+        console.warn(
+          "Unexpected response structure from getLegacySubscriptions for initial fetch:",
+          responseData
+        );
+      }
+
+      setLegacyInitialData(initialData);
+      setLegacyTotalCount(totalCount);
+
+      if (activeLegacyFilter === null) setLegacyCountForTabDisplay(totalCount);
+    } catch (err) {
+      console.error("Error fetching initial legacy subscriptions:", err);
+      showSnackbar(
+        `Error: ${err.message || "Could not fetch initial legacy subscriptions."}`,
+        "error"
+      );
+      setLegacyInitialData([]);
+      setLegacyTotalCount(0);
+    } finally {
+      setLegacyLoadingInitial(false);
+    }
+  }, [activeLegacyFilter, legacyOrder, legacyOrderBy, showSnackbar]);
+
+  const handleLoadMoreLegacy = useCallback(
+    async (pageToFetch, rowsPerPageForLoadMore) => {
+      // This function only fetches and returns data, doesn't set state here
+      try {
+        const queryParams = {
+          page: pageToFetch,
+          page_size: rowsPerPageForLoadMore,
+          ordering: `${legacyOrder === "desc" ? "-" : ""}${legacyOrderBy}`,
+        };
+        if (activeLegacyFilter !== null) queryParams.processed = activeLegacyFilter;
+        const responseData = await getLegacySubscriptions(queryParams);
+        return Array.isArray(responseData) ? responseData : responseData?.data || [];
+      } catch (error) {
+        console.error("Error fetching more legacy subscriptions:", error);
+        showSnackbar(
+          `Error: ${error.message || "Could not load more legacy subscriptions."}`,
+          "error"
+        );
+        return [];
+      }
+    },
+    [activeLegacyFilter, legacyOrder, legacyOrderBy, showSnackbar]
+  );
+
+  // useEffects to trigger data fetching based on dependencies
   useEffect(() => {
     if (activeTab === 0) {
       fetchSubscriptions();
-    } else if (activeTab === 1) {
-      fetchPendingSubscriptions();
-    } else if (activeTab === 2) {
-      fetchLegacySubscriptions();
     }
-  }, [activeTab, fetchSubscriptions, fetchPendingSubscriptions, fetchLegacySubscriptions]);
+  }, [activeTab, page, rowsPerPage, searchTerm, filters, order, orderBy, fetchSubscriptions]); // Correct dependencies for Subscriptions
 
-  // ٢. إنشاء دالة معالج النقر لزر التحديث
+  useEffect(() => {
+    if (activeTab === 1) {
+      fetchPendingStats();
+      fetchPendingSubscriptionsData();
+    }
+  }, [
+    activeTab,
+    currentPendingFilter,
+    pendingPage,
+    pendingRowsPerPage,
+    pendingSearchTerm,
+    fetchPendingStats,
+    fetchPendingSubscriptionsData,
+  ]); // Correct dependencies for Pending
+
+  useEffect(() => {
+    if (activeTab === 2) {
+      fetchInitialLegacySubscriptions(); // Fetch initial batch for Legacy
+    }
+  }, [activeTab, activeLegacyFilter, legacyOrder, legacyOrderBy, fetchInitialLegacySubscriptions]); // Correct dependencies for Legacy
+
+  // Refresh Handler
   const handleRefreshData = async () => {
     showSnackbar("Refreshing data...", "info");
-    // لا حاجة لإعادة تعيين الصفحة هنا، نريد تحديث البيانات الحالية
-    if (activeTab === 0) {
-      await fetchSubscriptions();
-    } else if (activeTab === 1) {
-      await fetchPendingSubscriptions();
+    if (activeTab === 0) await fetchSubscriptions();
+    else if (activeTab === 1) {
+      await fetchPendingStats();
+      await fetchPendingSubscriptionsData();
     } else if (activeTab === 2) {
-      await fetchLegacySubscriptions();
+      await fetchInitialLegacySubscriptions(); // Refetch initial batch
+      await fetchLegacyCountForTabsManager(); // Also update tab count
     }
-    await fetchCounts(); // تحديث الأعداد أيضًا
     showSnackbar("Data refreshed!", "success");
   };
 
+  // --- Handlers for Subscriptions Tab ---
   const handleSearch = (searchValue) => {
     setSearchTerm(searchValue);
     setPage(0);
   };
-
   const handleFilter = (filterValues) => {
-    const processedFilters = { ...filterValues };
-    if (processedFilters.startDate) {
-      processedFilters.startDate =
-        processedFilters.startDate.isSameOrAfter(processedFilters.endDate, "day") &&
-        processedFilters.endDate
-          ? processedFilters.endDate.subtract(1, "day")
-          : processedFilters.startDate;
-    }
-    if (
-      processedFilters.endDate &&
-      processedFilters.startDate &&
-      processedFilters.endDate.isBefore(processedFilters.startDate, "day")
-    ) {
-      processedFilters.endDate = processedFilters.startDate.add(1, "day");
-      showSnackbar("End date cannot be before start date. Adjusted end date.", "warning");
-    }
-    setFilters(processedFilters);
+    setFilters(filterValues);
     setPage(0);
   };
-
   const handleRequestSort = (event, property) => {
     const isAsc = orderBy === property && order === "asc";
     setOrder(isAsc ? "desc" : "asc");
     setOrderBy(property);
-    setPage(0);
+    setPage(0); // Reset page on sort
   };
-
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
-
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
+  // --- Handlers for Pending Subscriptions Tab ---
+  const handlePendingFilterChange = (newFilterStatus) => {
+    setCurrentPendingFilter(newFilterStatus);
+    setPendingPage(0);
+  };
+  const handlePendingSearchChange = (event) => {
+    setPendingSearchTerm(event.target.value);
+    setPendingPage(0);
+  };
+  const handlePendingPageChange = (event, newPage) => {
+    setPendingPage(newPage);
+  };
+  const handlePendingRowsPerPageChange = (event) => {
+    setPendingRowsPerPage(parseInt(event.target.value, 10));
+    setPendingPage(0);
+  };
+  const handleMarkPendingComplete = async (id) => {
+    setPendingLoading(true);
+    try {
+      await handlePendingSubscriptionAction(id);
+      showSnackbar("Subscription marked as complete successfully!", "success");
+      await fetchPendingSubscriptionsData();
+      await fetchPendingStats();
+      await fetchSubscriptions();
+      await fetchLegacyCountForTabsManager();
+    } catch (err) {
+      console.error("Error marking subscription complete:", err);
+      showSnackbar(
+        err.response?.data?.message || err.response?.data?.error || "Error processing subscription",
+        "error"
+      );
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  // --- Handlers for Legacy Subscriptions Tab ---
+  const handleLegacyFilterChange = (newFilterValue) => {
+    setActiveLegacyFilter(newFilterValue);
+    // No need to set page; useEffect handles refetching initial data
+  };
+  const handleLegacyRequestSort = (event, property) => {
+    const isAsc = legacyOrderBy === property && legacyOrder === "asc";
+    setLegacyOrder(isAsc ? "desc" : "asc");
+    setLegacyOrderBy(property);
+    // No need to set page; useEffect handles refetching initial data
+  };
+
+  // Modal Handlers
   const handleAddNewClick = () => {
     setSelectedSubscription(null);
     setFormModalOpen(true);
   };
-
   const handleEditClick = (subscription) => {
     setSelectedSubscription(subscription);
     setFormModalOpen(true);
   };
-
   const handleCloseModal = () => {
     setFormModalOpen(false);
     setSelectedSubscription(null);
@@ -309,10 +472,8 @@ function Tables() {
 
   const handleFormSubmit = async (formData) => {
     const isEditMode = !!selectedSubscription;
-    // استخدام متغيرات loading محددة لكل تبويب إذا أردت
     const currentLoadingSetter =
-      activeTab === 0 ? setLoading : activeTab === 1 ? setPendingLoading : setLegacyLoading;
-
+      activeTab === 0 ? setLoading : activeTab === 1 ? setPendingLoading : setLegacyLoadingInitial;
     currentLoadingSetter(true);
     try {
       if (isEditMode) {
@@ -323,90 +484,32 @@ function Tables() {
         showSnackbar("Subscription added successfully!", "success");
       }
       handleCloseModal();
-      // إعادة جلب بيانات التبويب النشط
-      if (activeTab === 0) await fetchSubscriptions();
-      else if (activeTab === 1) await fetchPendingSubscriptions();
-      else if (activeTab === 2) await fetchLegacySubscriptions();
-
-      await fetchCounts();
+      // Refresh all potentially affected data
+      await fetchSubscriptions();
+      await fetchPendingStats();
+      await fetchPendingSubscriptionsData();
+      await fetchInitialLegacySubscriptions();
+      await fetchLegacyCountForTabsManager();
     } catch (err) {
       console.error("Error submitting form:", err);
-      const errorMessage =
-        err.response?.data?.detail ||
-        err.message ||
-        (isEditMode ? "Error updating subscription" : "Error adding subscription");
+      const errorMessage = err.response?.data?.detail || err.message || "Error processing form";
       showSnackbar(errorMessage, "error");
     } finally {
       currentLoadingSetter(false);
     }
   };
 
-  const handlePendingPageChange = (event, newPage) => {
-    setPendingPage(newPage);
-  };
-
-  const handlePendingRowsPerPageChange = (event) => {
-    setPendingRowsPerPage(parseInt(event.target.value, 10));
-    setPendingPage(0);
-  };
-
-  const handleApprove = async (id) => {
-    setPendingLoading(true);
-    try {
-      await handlePendingSubscriptionAction(id, "approve");
-      showSnackbar("Subscription approved successfully!", "success");
-      await fetchPendingSubscriptions();
-      await fetchCounts();
-      if (activeTab === 0) await fetchSubscriptions();
-    } catch (err) {
-      console.error("Error approving subscription:", err);
-      showSnackbar(err.response?.data?.detail || "Error approving subscription", "error");
-    } finally {
-      setPendingLoading(false);
-    }
-  };
-
-  const handleReject = async (id) => {
-    setPendingLoading(true);
-    try {
-      await handlePendingSubscriptionAction(id, "reject");
-      showSnackbar("Subscription rejected successfully!", "info");
-      await fetchPendingSubscriptions();
-      await fetchCounts();
-    } catch (err) {
-      console.error("Error rejecting subscription:", err);
-      showSnackbar(err.response?.data?.detail || "Error rejecting subscription", "error");
-    } finally {
-      setPendingLoading(false);
-    }
-  };
-
-  const handleLegacyPageChange = (event, newPage) => {
-    setLegacyPage(newPage);
-  };
-
-  const handleLegacyRowsPerPageChange = (event) => {
-    setLegacyRowsPerPage(parseInt(event.target.value, 10));
-    setLegacyPage(0);
-  };
-
-  // لتحديد ما إذا كان أي نوع من التحميل نشطًا
-  const isAnyLoading = loading || pendingLoading || legacyLoading;
+  const isAnyLoading = loading || pendingLoading || legacyLoadingInitial;
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox pt={6} pb={3}>
-          {" "}
-          {/* هذا هو MDBox الخارجي */}
-          <Grid container spacing={6}>
-            {" "}
-            {/* فتح Grid container */}
+          <Grid container spacing={3}>
             <Grid item xs={12}>
-              {" "}
-              {/* فتح Grid item */}
               <Card>
+                {/* Card Header */}
                 <MDBox
                   mx={2}
                   mt={-3}
@@ -421,29 +524,36 @@ function Tables() {
                   alignItems="center"
                 >
                   <MDTypography variant="h6" color="white">
-                    Subscriptions Management {/* تم التعديل في الرد السابق، كان Manager */}
+                    Subscriptions Management
                   </MDTypography>
                 </MDBox>
 
+                {/* Tabs and Refresh Button */}
                 <MDBox
                   display="flex"
                   justifyContent="space-between"
                   alignItems="center"
                   px={2}
-                  pt={1}
+                  py={1}
+                  flexWrap="wrap"
                 >
                   <TabsManager
                     activeTab={activeTab}
                     handleTabChange={handleTabChange}
-                    pendingCount={pendingCount}
-                    legacyCount={legacyCount}
+                    pendingCount={pendingStats.pending}
+                    legacyCount={legacyCountForTabDisplay}
                   />
                   <Tooltip title="Refresh Data">
-                    <IconButton onClick={handleRefreshData} color="info" disabled={isAnyLoading}>
+                    <IconButton
+                      onClick={handleRefreshData}
+                      color="info"
+                      disabled={isAnyLoading}
+                      sx={{ ml: "auto" }}
+                    >
                       {isAnyLoading &&
                       ((activeTab === 0 && loading) ||
                         (activeTab === 1 && pendingLoading) ||
-                        (activeTab === 2 && legacyLoading)) ? (
+                        (activeTab === 2 && legacyLoadingInitial)) ? (
                         <CircularProgress size={24} color="inherit" />
                       ) : (
                         <RefreshIcon />
@@ -452,6 +562,7 @@ function Tables() {
                   </Tooltip>
                 </MDBox>
 
+                {/* Tab Content */}
                 {activeTab === 0 && (
                   <>
                     <SubscriptionTableToolbar
@@ -461,6 +572,7 @@ function Tables() {
                       onAddNewClick={handleAddNewClick}
                       availableSources={availableSources}
                     />
+                    {/* Display loading or error specific to this tab */}
                     {error && !loading && (
                       <MDBox px={3} py={1}>
                         <MuiAlert
@@ -468,7 +580,7 @@ function Tables() {
                           onClose={() => setError(null)}
                           sx={{ width: "100%" }}
                         >
-                          {error}
+                          {error} {/* عرض رسالة الخطأ الخاصة بـ Subscriptions Tab */}
                         </MuiAlert>
                       </MDBox>
                     )}
@@ -483,60 +595,110 @@ function Tables() {
                       order={order}
                       orderBy={orderBy}
                       onRequestSort={handleRequestSort}
-                      loading={loading}
+                      loading={loading} // Pass loading state for internal skeleton if needed
                     />
+                    )}
                   </>
                 )}
 
                 {activeTab === 1 && (
                   <>
-                    {pendingLoading && pendingSubscriptions.length === 0 ? (
-                      <MDBox display="flex" justifyContent="center" p={5}>
-                        <CircularProgress />
-                      </MDBox>
-                    ) : (
-                      <PendingSubscriptionsTable
-                        pendingSubscriptions={pendingSubscriptions}
-                        page={pendingPage}
-                        rowsPerPage={pendingRowsPerPage}
-                        onPageChange={handlePendingPageChange}
-                        onRowsPerPageChange={handlePendingRowsPerPageChange}
-                        onApprove={handleApprove}
-                        onReject={handleReject}
-                        totalCount={pendingTotal}
-                        loading={pendingLoading}
+                    <MDBox
+                      p={2}
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      flexWrap="wrap"
+                      gap={2}
+                      sx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}
+                    >
+                      <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                        <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mr: 1 }}>
+                          Status:
+                        </MDTypography>
+                        <MuiChip
+                          label={`Pending (${pendingStats.pending || 0})`}
+                          icon={<PendingActionsIcon />}
+                          clickable
+                          color={currentPendingFilter === "pending" ? "primary" : "default"}
+                          onClick={() => handlePendingFilterChange("pending")}
+                          variant={currentPendingFilter === "pending" ? "filled" : "outlined"}
+                          size="small"
+                        />
+                        <MuiChip
+                          label={`Complete (${pendingStats.complete || 0})`}
+                          icon={<CheckCircleIcon />}
+                          clickable
+                          color={currentPendingFilter === "complete" ? "primary" : "default"}
+                          onClick={() => handlePendingFilterChange("complete")}
+                          variant={currentPendingFilter === "complete" ? "filled" : "outlined"}
+                          size="small"
+                        />
+                        <MuiChip
+                          label={`All (${pendingStats.total_all || 0})`}
+                          icon={<ListAltIcon />}
+                          clickable
+                          color={currentPendingFilter === "all" ? "primary" : "default"}
+                          onClick={() => handlePendingFilterChange("all")}
+                          variant={currentPendingFilter === "all" ? "filled" : "outlined"}
+                          size="small"
+                        />
+                      </Box>
+                      <TextField
+                        placeholder="Search User, ID..."
+                        variant="outlined"
+                        size="small"
+                        value={pendingSearchTerm}
+                        onChange={handlePendingSearchChange}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              {" "}
+                              <SearchIcon fontSize="small" />{" "}
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={{ minWidth: { xs: "100%", sm: "250px" }, maxWidth: "300px" }}
                       />
-                    )}
+                    </MDBox>
+                    {/* Conditional rendering for Pending Table */}
+                    <PendingSubscriptionsTable
+                      pendingSubscriptions={pendingSubscriptions}
+                      page={pendingPage}
+                      rowsPerPage={pendingRowsPerPage}
+                      onPageChange={handlePendingPageChange}
+                      onRowsPerPageChange={handlePendingRowsPerPageChange}
+                      onMarkComplete={handleMarkPendingComplete}
+                      totalCount={pendingTotal}
+                      loading={pendingLoading}
+                    />
                   </>
                 )}
 
                 {activeTab === 2 && (
                   <>
-                    {legacyLoading && legacySubscriptions.length === 0 ? (
-                      <MDBox display="flex" justifyContent="center" p={5}>
-                        <CircularProgress />
-                      </MDBox>
-                    ) : (
-                      <LegacySubscriptionsTable
-                        legacySubscriptions={legacySubscriptions}
-                        page={legacyPage}
-                        rowsPerPage={legacyRowsPerPage}
-                        onPageChange={handleLegacyPageChange}
-                        onRowsPerPageChange={handleLegacyRowsPerPageChange}
-                        totalCount={legacyTotal}
-                        loading={legacyLoading}
-                      />
-                    )}
+                    {/* Legacy Table (using Load More props) */}
+                    <LegacySubscriptionsTable
+                      initialLegacySubscriptions={legacyInitialData}
+                      onLoadMore={handleLoadMoreLegacy}
+                      totalServerCount={legacyTotalCount}
+                      loadingInitial={legacyLoadingInitial}
+                      activeFilter={activeLegacyFilter}
+                      onFilterChange={handleLegacyFilterChange}
+                      order={legacyOrder}
+                      orderBy={legacyOrderBy}
+                      onRequestSort={handleLegacyRequestSort}
+                      // Pass the constant for rows per page if needed internally by child
+                      rowsPerPageForLoadMore={ROWS_PER_PAGE_FOR_LOAD_MORE}
+                    />
                   </>
                 )}
-              </Card>{" "}
-              {/* إغلاق Card */}
-            </Grid>{" "}
-            {/* <== إضافة إغلاق Grid item */}
-          </Grid>{" "}
-          {/* <== إضافة إغلاق Grid container */}
-        </MDBox>{" "}
-        {/* إغلاق MDBox الخارجي (السطر الذي كان يشير إليه الخطأ) */}
+              </Card>
+            </Grid>
+          </Grid>
+        </MDBox>
+
+        {/* Modal and Snackbar */}
         <SubscriptionFormModal
           open={formModalOpen}
           onClose={handleCloseModal}

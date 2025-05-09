@@ -476,26 +476,42 @@ export const getSubscriptionSources = async () => {
 /**
  * جلب الاشتراكات المعلقة
  */
-export const getPendingSubscriptions = async (filters = {}) => {
+export const getPendingSubscriptionsStats = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/admin/pending_subscriptions`, {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/pending_subscriptions/stats`, {
       headers: getAuthHeaders(),
-      params: filters,
     });
+    // يتوقع أن يكون الرد: { pending: X, complete: Y, total_all: Z, ... }
     return response.data;
   } catch (error) {
+    console.error("Error fetching pending stats:", error);
     throw error;
   }
 };
 
+// getPendingSubscriptions سيستقبل الآن كائنًا يحتوي على data و total_count
+export const getPendingSubscriptions = async (filters = {}) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/pending_subscriptions`, {
+      headers: getAuthHeaders(),
+      params: filters, // status, page, page_size, search
+    });
+    // response.data هو الآن { data: [...], total_count: N, page: P, page_size: S }
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching pending subscriptions:", error);
+    throw error;
+  }
+};
 /**
  * إجراءات على الاشتراكات المعلقة (قبول/رفض)
  */
-export const handlePendingSubscriptionAction = async (id, action) => {
+export const handlePendingSubscriptionAction = async (id) => {
+  // لم نعد بحاجة لتمرير 'action' كمعامل
   try {
     const response = await axios.post(
       `${API_BASE_URL}/api/admin/pending_subscriptions/${id}/action`,
-      { action },
+      { action: "mark_as_complete" }, // إرسال 'mark_as_complete' دائمًا
       { headers: getAuthHeaders() }
     );
     return response.data;
@@ -503,9 +519,8 @@ export const handlePendingSubscriptionAction = async (id, action) => {
     throw error;
   }
 };
-
 /**
- * جلب الاشتراكات القديمة
+ * جلب الاشتراكات القديمة مع خيارات محسنة للفلترة والفرز
  */
 export const getLegacySubscriptions = async (filters = {}) => {
   try {
@@ -513,6 +528,36 @@ export const getLegacySubscriptions = async (filters = {}) => {
       headers: getAuthHeaders(),
       params: filters,
     });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * جلب إحصائيات الاشتراكات القديمة
+ */
+export const getLegacySubscriptionStats = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/legacy_subscriptions/stats`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * تحديث حالة معالجة اشتراك قديم
+ */
+export const updateLegacySubscriptionProcessed = async (id, processed) => {
+  try {
+    const response = await axios.put(
+      `${API_BASE_URL}/api/admin/legacy_subscriptions/${id}/processed`,
+      { processed },
+      { headers: getAuthHeaders() }
+    );
     return response.data;
   } catch (error) {
     throw error;
