@@ -46,7 +46,7 @@ const SubscriptionFormModal = ({
           // If the original source is empty/null/undefined, set a default value.
           // "unknown" is a suggestion; you can use "manual" or any other default
           // that makes sense and is acceptable by your backend.
-          source: initialValues.source || "unknown",
+          source: initialValues.source || "manual",
         });
       } else {
         // Add mode
