@@ -21,7 +21,7 @@ const SubscriptionFormModal = ({
   onSubmit,
   initialValues = {},
   subscriptionTypes = [],
-  availableSources = [], // ستبقى هذه الخاصية لتعبئة القائمة في حال أردت تغيير المنطق مستقبلاً
+  availableSources = [], // Kept for future flexibility, though not used for selection in the current logic
   isEdit = false,
 }) => {
   const [formData, setFormData] = useState({
@@ -30,34 +30,37 @@ const SubscriptionFormModal = ({
     username: "",
     subscription_type_id: "",
     expiry_date: null,
-    source: "", // القيمة الأولية فارغة
+    source: "", // Initial value
   });
 
   useEffect(() => {
     if (open) {
       if (isEdit && initialValues && Object.keys(initialValues).length > 0) {
-        // تعديل: التحقق من isEdit هنا
         setFormData({
           telegram_id: initialValues.telegram_id || "",
           full_name: initialValues.full_name || "",
           username: initialValues.username || "",
           subscription_type_id: initialValues.subscription_type_id || "",
           expiry_date: initialValues.expiry_date ? dayjs(initialValues.expiry_date) : null,
-          source: initialValues.source || "", // استخدام المصدر الحالي للاشتراك
+          // --- MODIFICATION HERE ---
+          // If the original source is empty/null/undefined, set a default value.
+          // "unknown" is a suggestion; you can use "manual" or any other default
+          // that makes sense and is acceptable by your backend.
+          source: initialValues.source || "unknown",
         });
       } else {
-        // وضع الإضافة
+        // Add mode
         setFormData({
           telegram_id: "",
           full_name: "",
           username: "",
           subscription_type_id: "",
           expiry_date: null,
-          source: "manual", // القيمة الافتراضية للمصدر عند الإضافة
+          source: "manual", // Default source for new subscriptions
         });
       }
     }
-  }, [initialValues, open, isEdit]); // إضافة isEdit إلى مصفوفة الاعتماديات
+  }, [initialValues, open, isEdit]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -77,14 +80,17 @@ const SubscriptionFormModal = ({
           .toISOString()
       : null;
 
+    // The formData.source will now have a value ('unknown' or original, or 'manual' for new)
+    // so the !formData.source check should pass if a default is set for empty original sources.
     if (
       !formData.telegram_id ||
       !formData.full_name ||
-      !formData.username || // حتى لو معطل، يجب أن تكون له قيمة
-      !formData.subscription_type_id || // حتى لو معطل، يجب أن تكون له قيمة
+      !formData.username ||
+      !formData.subscription_type_id ||
       !expiryDateISO ||
-      !formData.source // حتى لو معطل، يجب أن تكون له قيمة
+      !formData.source // This check remains, but source should now always have a value
     ) {
+      // Consider using a more user-friendly notification (e.g., a Snackbar) instead of alert
       alert("Please fill in all required fields, including a valid expiry date.");
       return;
     }
@@ -127,7 +133,7 @@ const SubscriptionFormModal = ({
                 value={formData.full_name}
                 onChange={handleChange}
                 required
-                // Full Name قابل للتعديل دائماً
+                // Full Name is always editable
               />
             </Grid>
             <Grid item xs={12}>
@@ -137,9 +143,9 @@ const SubscriptionFormModal = ({
                 type="text"
                 fullWidth
                 value={formData.username}
-                onChange={handleChange} // يبقى onChange للسماح بالتعبئة الأولية
+                onChange={handleChange}
                 required
-                disabled={isEdit} // تعديل: تعطيل في وضع التعديل
+                disabled={isEdit}
               />
             </Grid>
             <Grid item xs={12}>
@@ -149,9 +155,9 @@ const SubscriptionFormModal = ({
                 name="subscription_type_id"
                 fullWidth
                 value={formData.subscription_type_id}
-                onChange={handleChange} // يبقى onChange للسماح بالتعبئة الأولية
+                onChange={handleChange}
                 required
-                disabled={isEdit} // تعديل: تعطيل في وضع التعديل
+                disabled={isEdit}
                 SelectProps={{
                   MenuProps: {
                     MenuListProps: {
@@ -186,12 +192,10 @@ const SubscriptionFormModal = ({
                 label="Source"
                 name="source"
                 fullWidth
-                value={formData.source} // سيتم تعيينه إلى "manual" في وضع الإضافة
-                onChange={handleChange} // يبقى onChange للسماح بالتعبئة الأولية
+                value={formData.source} // This will be 'manual' in add mode, or the original/defaulted source in edit mode
+                onChange={handleChange} // Kept for consistency, but field is disabled
                 required
-                disabled={true} // تعديل: تعطيل دائمًا (سواء إضافة أو تعديل)
-                // في وضع الإضافة، قيمته "manual"
-                // في وضع التعديل، قيمته هي المصدر الحالي للاشتراك
+                disabled={true} // Always disabled
                 SelectProps={{
                   MenuProps: {
                     MenuListProps: {
@@ -206,31 +210,23 @@ const SubscriptionFormModal = ({
                   shrink: true,
                 }}
               >
-                {/* لا نحتاج إلى خيار "Select Source" إذا كان الحقل معطلاً وقيمته محددة */}
-                {/* عرض القيمة الحالية فقط */}
-                {isEdit && formData.source && (
+                {/*
+                  The MenuItem logic here ensures that the correct value is displayed
+                  in the disabled select field.
+                  - For new subscriptions, 'manual' is shown.
+                  - For existing subscriptions, the actual (or defaulted 'unknown') source is shown.
+                */}
+                {formData.source && ( // Check if formData.source has a value to display
                   <MenuItem key={formData.source} value={formData.source}>
+                    {/* Capitalize first letter for display if desired, e.g., formData.source.charAt(0).toUpperCase() + formData.source.slice(1) */}
                     {formData.source}
                   </MenuItem>
                 )}
-                {!isEdit && (
-                  <MenuItem key="manual" value="manual">
-                    Manual
-                  </MenuItem>
-                )}
-                {/* إذا أردت عرض قائمة المصادر في وضع التعديل (حتى لو معطل)، يمكنك ترك الكود التالي */}
-                {/* ولكن بما أنه معطل، المستخدم لن يتمكن من الاختيار */}
-                {/* {isEdit && Array.isArray(availableSources) && availableSources.length > 0 ? (
-                  availableSources.map((sourceOption) => (
-                    <MenuItem
-                      key={sourceOption}
-                      value={sourceOption}
-                      sx={{ paddingTop: "8px", paddingBottom: "8px" }}
-                    >
-                      {sourceOption}
-                    </MenuItem>
-                  ))
-                ) : null} */}
+                {/*
+                  If you wanted to ensure a MenuItem is always present even if formData.source
+                  could somehow be empty (though our useEffect logic prevents this for 'source'),
+                  you might have more complex logic here. But given current setup, this is fine.
+                */}
               </MDInput>
             </Grid>
             <Grid item xs={12}>
@@ -243,11 +239,12 @@ const SubscriptionFormModal = ({
                     {...params}
                     fullWidth
                     required
-                    variant="standard"
+                    variant="standard" // MDInput is typically 'standard' or 'outlined', ensure consistency
                     InputLabelProps={{
                       ...params.InputLabelProps,
                       shrink: true,
                     }}
+                    // helperText={params.error ? "Invalid date format" : ""} // Example error handling
                   />
                 )}
               />
