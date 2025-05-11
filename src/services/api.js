@@ -3,7 +3,7 @@ import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
 
-const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
+const API_BASE_URL = "http://localhost:5000";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
@@ -558,6 +558,43 @@ export const updateLegacySubscriptionProcessed = async (id, processed) => {
       { processed },
       { headers: getAuthHeaders() }
     );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getTermsConditions = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/terms-conditions`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Update terms and conditions
+export const updateTermsConditions = async (termsArray) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/terms-conditions`,
+      { terms_array: termsArray },
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Get public terms and conditions (for users)
+export const getPublicTermsConditions = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/public/terms-conditions`);
     return response.data;
   } catch (error) {
     throw error;

@@ -1,23 +1,25 @@
-// src/layouts/managePlans/components/SubscriptionSettings.jsx
-
+// src/layouts/ManagePlans/components/SubscriptionSettings.jsx
 import React from "react";
-import Card from "@mui/material/Card";
+import Grid from "@mui/material/Grid";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
+import TermsConditionsSettings from "./TermsConditionsSettings";
 
 function SubscriptionSettings() {
   return (
-    <Card>
-      <MDBox p={3}>
-        <MDTypography variant="h6" fontWeight="medium">
-          Subscription Settings
-        </MDTypography>
-        {/* هنا يمكنك إضافة عناصر تحكم لإدارة الإعدادات مثل أسعار الاشتراكات، إلخ */}
-        <MDTypography variant="body2" color="text">
-          (Settings and additional data related to subscription types can be managed here.)
-        </MDTypography>
-      </MDBox>
-    </Card>
+    <MDBox>
+      <MDTypography variant="h5" fontWeight="bold" mb={3}>
+        System Settings
+      </MDTypography>
+
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <TermsConditionsSettings />
+        </Grid>
+
+        {/* Additional settings can be added here as needed */}
+      </Grid>
+    </MDBox>
   );
 }
 
