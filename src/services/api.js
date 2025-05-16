@@ -3,7 +3,7 @@ import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
 
-const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
+const API_BASE_URL = "http://localhost:5000";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
@@ -264,8 +264,8 @@ export const removeAuthToken = () => {
  * دوال إدارة المستخدمين:
  * يتم استخدام apiClient بحيث تمر كل الطلبات عبر الـ interceptors.
  */
-export const getUsers = () => {
-  return axios.get(`${API_BASE_URL}/api/admin/users`, {
+export const getUserspanel = () => {
+  return axios.get(`${API_BASE_URL}/api/admin/users_panel`, {
     headers: getAuthHeaders(),
   });
 };
@@ -289,6 +289,34 @@ export const addUser = (email, displayName, role) => {
       headers: getAuthHeaders(),
     }
   );
+};
+
+export const getUsers = async (filters = {}) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+      headers: getAuthHeaders(),
+      params: filters,
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * جلب بيانات مستخدم محدد مع تفاصيل الاشتراكات والمدفوعات
+ * @param {number} telegramId - معرف المستخدم على تلغرام
+ * @returns {Promise<Object>} - بيانات المستخدم التفصيلية
+ */
+export const getUserDetails = async (telegramId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/users/${telegramId}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 /**
@@ -506,7 +534,7 @@ export const getPendingSubscriptions = async (filters = {}) => {
 /**
  * إجراءات على الاشتراكات المعلقة (قبول/رفض)
  */
-export const handlePendingSubscriptionAction = async (id) => {
+export const handleSinglePendingSubscriptionAction = async (id) => {
   // لم نعد بحاجة لتمرير 'action' كمعامل
   try {
     const response = await axios.post(
@@ -519,6 +547,30 @@ export const handlePendingSubscriptionAction = async (id) => {
     throw error;
   }
 };
+
+export const handleBulkPendingSubscriptionsAction = async (filterCriteria = {}) => {
+  // <-- تغيير: تستقبل filterCriteria
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/pending_subscriptions/bulk_action`, // <-- تغيير: المسار الصحيح
+      {
+        action: "mark_as_complete", // ثابت
+        filter: filterCriteria, // <-- تغيير: إرسال فلاتر المعالجة الدفعية
+      },
+      { headers: getAuthHeaders() }
+    );
+    // response.data يجب أن يكون الكائن الذي يحتوي على success, message, details
+    return response.data;
+  } catch (error) {
+    console.error("Error in bulk pending subscriptions action:", error); // رسالة خطأ أوضح
+    // مهم: إعادة رمي الخطأ مع تفاصيل من الخادم إن أمكن
+    if (error.response && error.response.data) {
+      throw error.response.data; // يرمي { error: "...", details: {...} } إذا أرسلها الخادم
+    }
+    throw error; // يرمي الخطأ الأصلي إذا لم يكن هناك رد من الخادم
+  }
+};
+
 /**
  * جلب الاشتراكات القديمة مع خيارات محسنة للفلترة والفرز
  */

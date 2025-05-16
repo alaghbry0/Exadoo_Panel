@@ -1,116 +1,102 @@
-// layouts/tables/components/SubscriptionTableToolbar.jsx
-import React, { useState, useEffect, useCallback } from "react";
-import { Grid, MenuItem, IconButton, InputAdornment, Collapse, Box } from "@mui/material";
+import React, { useState, useEffect } from "react";
+import { Grid, MenuItem, IconButton, Collapse, Box, TextField } from "@mui/material"; // TextField قد لا تحتاجها إذا كنت تستخدم MDInput
 import MDBox from "components/MDBox";
-import MDInput from "components/MDInput";
+import MDInput from "components/MDInput"; // تأكد من أن هذا هو MDInput الخاص بك
 import MDButton from "components/MDButton";
-import { DatePicker } from "@mui/x-date-pickers";
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker"; // استيراد أكثر تحديدًا
 import FilterListIcon from "@mui/icons-material/FilterList";
 import AddIcon from "@mui/icons-material/Add";
 
-// دالة Debounce
-function debounce(func, delay) {
-  let timeout;
-  return function (...args) {
-    const context = this;
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(context, args), delay);
-  };
-}
-
 const SubscriptionTableToolbar = ({
-  onSearch,
-  onFilter,
+  onFilterChange,
+  filters: initialFiltersFromParent,
   subscriptionTypes,
   onAddNewClick,
   availableSources = [],
 }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showFilters, setShowFilters] = useState(false); // للتحكم في إظهار/إخفاء الفلاتر
-  const [filters, setFilters] = useState({
-    status: "",
-    type: "",
-    startDate: null,
-    endDate: null,
-    source: "",
-  });
+  const [showFilters, setShowFilters] = useState(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const debouncedSearch = useCallback(debounce(onSearch, 500), [onSearch]);
+  const [localFilters, setLocalFilters] = useState(
+    () =>
+      initialFiltersFromParent || {
+        status: "",
+        type: "",
+        startDate: null,
+        endDate: null,
+        source: "",
+      }
+  );
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    debouncedSearch(e.target.value);
-  };
+  useEffect(() => {
+    setLocalFilters(
+      initialFiltersFromParent || {
+        status: "",
+        type: "",
+        startDate: null,
+        endDate: null,
+        source: "",
+      }
+    );
+  }, [initialFiltersFromParent]);
 
-  const handleFilterChange = (e) => {
+  const handleLocalFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
+    setLocalFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDateChange = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
+    setLocalFilters((prev) => ({ ...prev, [field]: value }));
   };
 
   const applyFilters = () => {
-    // قم بإزالة القيم الفارغة أو null من الفلاتر قبل الإرسال
     const activeFilters = {};
-    Object.keys(filters).forEach((key) => {
-      if (filters[key] !== null && filters[key] !== "") {
-        activeFilters[key] = filters[key];
+    Object.keys(localFilters).forEach((key) => {
+      if (
+        localFilters[key] !== null &&
+        localFilters[key] !== "" &&
+        localFilters[key] !== undefined
+      ) {
+        if (
+          (key === "startDate" || key === "endDate") &&
+          localFilters[key] &&
+          typeof localFilters[key].toISOString === "function"
+        ) {
+          activeFilters[key] = localFilters[key].toISOString().split("T")[0];
+        } else {
+          activeFilters[key] = localFilters[key];
+        }
       }
     });
-    onFilter(activeFilters);
+    if (typeof onFilterChange === "function") {
+      onFilterChange(activeFilters);
+    } else {
+      console.error(
+        "SubscriptionTableToolbar: onFilterChange prop is not a function or not passed!"
+      );
+    }
   };
 
-  const clearAll = () => {
-    setSearchTerm("");
-    setFilters({
+  const clearAllFilters = () => {
+    const clearedFilters = {
       status: "",
       type: "",
       startDate: null,
       endDate: null,
       source: "",
-    });
-    onSearch("");
-    onFilter({});
-    setShowFilters(false); // إخفاء الفلاتر عند المسح
+    };
+    setLocalFilters(clearedFilters);
+    if (typeof onFilterChange === "function") {
+      onFilterChange({});
+    } else {
+      console.error(
+        "SubscriptionTableToolbar: onFilterChange prop is not a function or not passed on clear!"
+      );
+    }
   };
 
   return (
     <MDBox p={3}>
-      <Grid container spacing={2} alignItems="center" justifyContent="space-between">
-        {/* Search Input and Add New Button */}
-        <Grid item xs={12} sm={6} md={5}>
-          <MDInput
-            fullWidth
-            placeholder="Search by name, username or ID"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-              endAdornment: searchTerm && (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={() => {
-                      setSearchTerm("");
-                      onSearch("");
-                    }}
-                    size="small"
-                  >
-                    <ClearIcon />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Grid>
+      <Grid container spacing={2} alignItems="center" justifyContent="flex-end">
         <Grid item xs={12} sm="auto">
           <MDBox display="flex" gap={1}>
             <MDButton
@@ -119,7 +105,7 @@ const SubscriptionTableToolbar = ({
               onClick={() => setShowFilters(!showFilters)}
               startIcon={<FilterListIcon />}
             >
-              Filters
+              Filters {showFilters ? "(Hide)" : "(Show)"}
             </MDButton>
             <MDButton
               variant="gradient"
@@ -133,18 +119,18 @@ const SubscriptionTableToolbar = ({
         </Grid>
       </Grid>
 
-      {/* Collapsible Filter Section */}
-      <Collapse in={showFilters}>
+      <Collapse in={showFilters} timeout="auto" unmountOnExit>
         <MDBox pt={2} mt={2} borderTop="1px solid #eee">
           <Grid container spacing={2} alignItems="flex-end">
-            <Grid item xs={12} sm={6} md={3}>
+            {/* ... الحقول الأخرى ... */}
+            <Grid item xs={12} sm={6} md={2.4}>
               <MDInput
                 select
                 fullWidth
                 label="Status"
                 name="status"
-                value={filters.status}
-                onChange={handleFilterChange}
+                value={localFilters.status}
+                onChange={handleLocalFilterChange}
                 variant="standard"
               >
                 <MenuItem value="">
@@ -154,84 +140,86 @@ const SubscriptionTableToolbar = ({
                 <MenuItem value="inactive">Inactive</MenuItem>
               </MDInput>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <MDInput
                 select
                 fullWidth
                 label="Subscription Type"
                 name="type"
-                value={filters.type}
-                onChange={handleFilterChange}
+                value={localFilters.type}
+                onChange={handleLocalFilterChange}
                 variant="standard"
               >
                 <MenuItem value="">
                   <em>All Types</em>
                 </MenuItem>
                 {subscriptionTypes.map((type) => (
-                  <MenuItem key={type.id} value={type.id}>
+                  <MenuItem key={type.id} value={type.id || type.value}>
                     {type.name}
                   </MenuItem>
                 ))}
               </MDInput>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <MDInput
                 select
                 fullWidth
                 label="Source"
                 name="source"
-                value={filters.source}
-                onChange={handleFilterChange}
+                value={localFilters.source}
+                onChange={handleLocalFilterChange}
                 variant="standard"
               >
                 <MenuItem value="">
                   <em>All Sources</em>
                 </MenuItem>
                 {availableSources.map((source) => (
-                  <MenuItem key={source} value={source}>
-                    {source || "Unknown"}
+                  <MenuItem key={source.value || source} value={source.value || source}>
+                    {source.label || source || "Unknown"}
                   </MenuItem>
                 ))}
               </MDInput>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <DatePicker
                 label="From Date"
-                value={filters.startDate}
+                value={localFilters.startDate}
                 onChange={(date) => handleDateChange("startDate", date)}
-                renderInput={(params) => <MDInput fullWidth {...params} variant="standard" />}
+                renderInput={(params) => <MDInput {...params} fullWidth variant="standard" />}
               />
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <DatePicker
                 label="To Date"
-                value={filters.endDate}
+                value={localFilters.endDate}
                 onChange={(date) => handleDateChange("endDate", date)}
-                renderInput={(params) => <MDInput fullWidth {...params} variant="standard" />}
+                renderInput={(params) => <MDInput {...params} fullWidth variant="standard" />}
               />
             </Grid>
-            <Grid item xs={12} sm={12} md={6}>
+
+            <Grid item xs={12}>
               <MDBox
                 display="flex"
-                justifyContent={{ xs: "stretch", md: "flex-end" }}
+                justifyContent={{ xs: "stretch", sm: "flex-end" }}
                 gap={1}
+                mt={2}
                 width="100%"
               >
+                <MDButton
+                  variant="outlined"
+                  color="secondary"
+                  onClick={clearAllFilters}
+                  sx={{ flexGrow: { xs: 1, sm: 0 } }}
+                >
+                  Clear All
+                </MDButton>
                 <MDButton
                   variant="gradient"
                   color="info"
                   onClick={applyFilters}
-                  sx={{ flexGrow: { xs: 1, md: 0 } }}
+                  sx={{ flexGrow: { xs: 1, sm: 0 } }}
                 >
                   Apply Filters
-                </MDButton>
-                <MDButton
-                  variant="outlined"
-                  color="secondary"
-                  onClick={clearAll}
-                  sx={{ flexGrow: { xs: 1, md: 0 } }}
-                >
-                  Clear All
                 </MDButton>
               </MDBox>
             </Grid>

@@ -1,6 +1,6 @@
 // layouts/tables/components/PendingSubscriptionsTable.jsx
 
-import React from "react";
+import React, { useState } from "react"; // <<< إضافة useState
 import {
   Table,
   TableBody,
@@ -13,11 +13,14 @@ import {
   Chip,
   Tooltip,
   Skeleton,
+  Dialog, // <<< إضافة Dialog
+  DialogActions, // <<< إضافة DialogActions
+  DialogContent, // <<< إضافة DialogContent
+  DialogContentText, // <<< إضافة DialogContentText
+  DialogTitle, // <<< إضافة DialogTitle
 } from "@mui/material";
-// import CheckIcon from "@mui/icons-material/Check"; // إزالة، لم يعد مستخدماً
-// import CloseIcon from "@mui/icons-material/Close"; // إزالة، لم يعد مستخدماً
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline"; // أيقونة لإكمال
-import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty"; // أيقونة لـ pending
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
@@ -29,12 +32,12 @@ const headCells = [
   { id: "username", label: "USERNAME", width: "130px", minWidth: "130px" },
   { id: "subscription_type_name", label: "SUB TYPE", width: "140px", minWidth: "140px" },
   { id: "found_at", label: "FOUND AT", width: "130px", minWidth: "130px", align: "center" },
-  { id: "status", label: "STATUS", width: "120px", minWidth: "120px", align: "center" }, // تم تعديل العرض قليلاً
+  { id: "status", label: "STATUS", width: "120px", minWidth: "120px", align: "center" },
   {
     id: "actions",
-    label: "ACTION", // تم تغيير الاسم
+    label: "ACTION",
     sortable: false,
-    width: "120px", // عرض مناسب لزر واحد
+    width: "120px",
     minWidth: "120px",
     align: "center",
   },
@@ -46,13 +49,32 @@ const PendingSubscriptionsTable = ({
   rowsPerPage,
   onPageChange,
   onRowsPerPageChange,
-  // onApprove, // <<< إزالة
-  // onReject,  // <<< إزالة
-  onMarkComplete, // <<< الدالة الجديدة
+  onMarkComplete,
   totalCount = 0,
   loading,
 }) => {
-  // دالة للحصول على الأنماط المشتركة للخلايا
+  // <<< بداية التعديلات لنافذة التأكيد
+  const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState(null);
+
+  const handleOpenConfirmDialog = (subscriptionId) => {
+    setSelectedSubscriptionId(subscriptionId);
+    setOpenConfirmDialog(true);
+  };
+
+  const handleCloseConfirmDialog = () => {
+    setOpenConfirmDialog(false);
+    setSelectedSubscriptionId(null); // إعادة تعيين للتأكد
+  };
+
+  const handleConfirmComplete = () => {
+    if (selectedSubscriptionId) {
+      onMarkComplete(selectedSubscriptionId);
+    }
+    handleCloseConfirmDialog();
+  };
+  // <<< نهاية التعديلات لنافذة التأكيد
+
   const getCommonCellStyles = (cellConfig) => ({
     py: 0.8,
     px: 1.5,
@@ -184,9 +206,9 @@ const PendingSubscriptionsTable = ({
                                     variant="gradient"
                                     color="success"
                                     size="small"
-                                    onClick={() => onMarkComplete(subscription.id)}
-                                    startIcon={<CheckCircleOutlineIcon />} // أيقونة البداية
-                                    // sx={{ minWidth: "100px" }} // لضمان عرض النص مع الأيقونة
+                                    // <<< تعديل onClick هنا
+                                    onClick={() => handleOpenConfirmDialog(subscription.id)}
+                                    startIcon={<CheckCircleOutlineIcon />}
                                   >
                                     Complete
                                   </MDButton>
@@ -201,7 +223,7 @@ const PendingSubscriptionsTable = ({
                                     : "text.secondary"
                                 }
                                 fontWeight="medium"
-                                sx={{ textTransform: "capitalize" }} // لجعل الحرف الأول كبيرًا
+                                sx={{ textTransform: "capitalize" }}
                               >
                                 {subscription.status === "complete"
                                   ? "Completed"
@@ -209,7 +231,7 @@ const PendingSubscriptionsTable = ({
                                 {subscription.admin_reviewed_at &&
                                   (subscription.status === "complete" ||
                                     subscription.status === "approved" ||
-                                    subscription.status === "rejected") && ( // عرض التاريخ للحالات المراجَعة
+                                    subscription.status === "rejected") && (
                                     <Tooltip
                                       title={`Reviewed: ${dayjs(
                                         subscription.admin_reviewed_at
@@ -234,23 +256,22 @@ const PendingSubscriptionsTable = ({
                                   <HourglassEmptyIcon fontSize="small" />
                                 ) : subscription.status === "complete" ? (
                                   <CheckCircleOutlineIcon fontSize="small" />
-                                ) : // يمكنك إضافة أيقونات لحالات أخرى إذا وجدت
-                                undefined
+                                ) : undefined
                               }
                               color={
                                 subscription.status === "pending"
                                   ? "warning"
-                                  : subscription.status === "complete" // أو "approved" إذا كنت لا تزال تستخدمها كمرادف
+                                  : subscription.status === "complete"
                                   ? "success"
-                                  : subscription.status === "rejected" // إذا كانت هذه الحالة لا تزال ممكنة
+                                  : subscription.status === "rejected"
                                   ? "error"
-                                  : "default" // لحالات أخرى غير متوقعة
+                                  : "default"
                               }
                               size="small"
                               sx={{
                                 borderRadius: "6px",
                                 fontWeight: "medium",
-                                minWidth: "90px", // عرض أدنى للـ Chip
+                                minWidth: "90px",
                                 textTransform: "capitalize",
                               }}
                             />
@@ -298,7 +319,7 @@ const PendingSubscriptionsTable = ({
         </Table>
       </TableContainer>
       <TablePagination
-        rowsPerPageOptions={[10, 20, 50, 100]} // يمكنك إضافة المزيد من الخيارات
+        rowsPerPageOptions={[10, 20, 50, 100]}
         component="div"
         count={totalCount}
         rowsPerPage={rowsPerPage}
@@ -307,10 +328,34 @@ const PendingSubscriptionsTable = ({
         onRowsPerPageChange={onRowsPerPageChange}
         showFirstButton
         showLastButton
-        // يمكنك إضافة props أخرى لـ TablePagination لتحسين تجربة المستخدم
-        // labelRowsPerPage="Rows:"
-        // labelDisplayedRows={({ from, to, count }) => `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`}
       />
+      {/* <<< إضافة Dialog JSX هنا */}
+      <Dialog
+        open={openConfirmDialog}
+        onClose={handleCloseConfirmDialog} // لإغلاق النافذة عند الضغط خارجها أو على زر Esc
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <DialogTitle id="confirm-dialog-title">Confirm Action</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-dialog-description">
+            Are you sure you want to remove this user from this channel? This action cannot be
+            undone. undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          {" "}
+          {/* إضافة padding لأزرار الـ Dialog */}
+          <MDButton onClick={handleCloseConfirmDialog} color="secondary" variant="text">
+            {" "}
+            {/* استخدام variant="text" للإلغاء */}
+            Cancel
+          </MDButton>
+          <MDButton onClick={handleConfirmComplete} color="success" variant="gradient" autoFocus>
+            Confirm
+          </MDButton>
+        </DialogActions>
+      </Dialog>
     </MDBox>
   );
 };

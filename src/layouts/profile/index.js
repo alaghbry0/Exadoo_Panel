@@ -26,7 +26,7 @@ import WalletSettingsSection from "layouts/profile/components/WalletSettingsSect
 import ReminderSettingsSection from "layouts/profile/components/ReminderSettingsSection";
 
 // استيراد دوال API
-import { getUsers, deleteUser, addUser } from "services/api";
+import { getUserspanel, deleteUser, addUser } from "services/api";
 
 // قسم إدارة المستخدمين
 function UserManagementSection() {
@@ -39,7 +39,7 @@ function UserManagementSection() {
   // جلب قائمة المستخدمين من الخادم
   const fetchUsers = async () => {
     try {
-      const res = await getUsers();
+      const res = await getUserspanel();
       setUsers(res.data.users);
     } catch (error) {
       console.error("Error fetching users", error);

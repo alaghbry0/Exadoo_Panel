@@ -45,6 +45,7 @@ import Profile from "layouts/profile";
 import SignIn from "layouts/authentication/sign-in";
 import ChatbotSettings from "layouts/ChatbotSettings";
 import Icon from "@mui/material/Icon";
+import Users from "layouts/users";
 
 const routes = [
   {
@@ -65,7 +66,15 @@ const routes = [
   },
   {
     type: "collapse",
-    name: "Tables",
+    name: "User management",
+    key: "users",
+    icon: <Icon fontSize="small">group</Icon>,
+    route: "/users",
+    component: <Users />,
+  },
+  {
+    type: "collapse",
+    name: "Subscription management",
     key: "tables",
     icon: <Icon fontSize="small">table_view</Icon>,
     route: "/tables",

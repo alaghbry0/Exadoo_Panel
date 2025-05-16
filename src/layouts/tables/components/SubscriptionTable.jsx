@@ -1,3 +1,4 @@
+// layouts/tables/components/SubscriptionTable.jsx
 import React from "react";
 import {
   Table,
@@ -12,18 +13,19 @@ import {
   Tooltip,
   TableSortLabel,
   Skeleton,
-  Button, // <<<<<<< أضفنا Button
-  CircularProgress, // <<<<<<< أضفنا CircularProgress للتحميل
+  CircularProgress,
+  Typography, // <<< تم التعديل: أضفنا Typography من MUI
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore"; // << أيقونة اختيارية للزر
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline"; // <<< تم الإضافة
 
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
+import MDButton from "components/MDButton"; // <<< تم التعديل: استخدام MDButton
 import dayjs from "dayjs";
 
 const headCells = [
-  // ... (نفس تعريفات headCells لديك)
   { id: "username", label: "USERNAME", width: "130px", minWidth: "130px", sortable: true },
   { id: "full_name", label: "NAME", width: "180px", minWidth: "180px", sortable: true },
   {
@@ -70,29 +72,26 @@ const headCells = [
 
 const SubscriptionTable = ({
   subscriptions,
-  // --- Props معدلة/جديدة ---
-  onLoadMore, // دالة لجلب المزيد
-  hasMore, // هل يوجد المزيد من البيانات؟
-  loadingMore, // هل عملية جلب المزيد جارية؟
-  // --- نهاية Props معدلة/جديدة ---
+  onLoadMore,
+  hasMore,
+  loadingMore,
   onEditClick,
   order,
   orderBy,
   onRequestSort,
   loading, // هذا للتحميل الأولي
-  totalCount = 0, // لا يزال مفيدًا لمعرفة العدد الإجمالي إذا لزم الأمر
+  totalCount = 0,
 }) => {
   // --- DEBUGGING START ---
-  console.log("[SubscriptionTable] Props received:", {
-    subscriptions,
-    totalCount,
-    loading,
-    loadingMore,
-    hasMore,
-    order,
-    orderBy,
-  });
-  // ... (باقي console.log الخاص بك)
+  // console.log("[SubscriptionTable] Props received:", {
+  //   subscriptions,
+  //   totalCount,
+  //   loading,
+  //   loadingMore,
+  //   hasMore,
+  //   order,
+  //   orderBy,
+  // });
   // --- DEBUGGING END ---
 
   const createSortHandler = (property) => (event) => {
@@ -131,8 +130,6 @@ const SubscriptionTable = ({
   };
 
   const renderSkeletonRows = () => {
-    // نعرض عدد قليل من Skeletons ثابت عند التحميل الأولي
-    // أو يمكنك استخدام rowsPerPage إذا كنت لا تزال تمررها من مكان ما كـ default
     const skeletonRowCount = loading && (!subscriptions || subscriptions.length === 0) ? 5 : 0;
     return Array.from(new Array(skeletonRowCount)).map((_, index) => (
       <TableRow key={`skeleton-${index}`}>
@@ -159,7 +156,7 @@ const SubscriptionTable = ({
         elevation={0}
         sx={{
           borderRadius: "8px",
-          overflow: "hidden", // تأكد من أن هذا لا يخفي زر "جلب المزيد" إذا كان بالداخل
+          overflow: "hidden",
           border: (theme) => `1px solid ${theme.palette.divider}`,
           boxShadow: "none",
         }}
@@ -321,7 +318,7 @@ const SubscriptionTable = ({
                     </TableRow>
                   );
                 })
-              : !loading && ( // إذا لم يكن هناك تحميل ولا توجد بيانات
+              : !loading && (
                   <TableRow>
                     <TableCell colSpan={headCells.length} align="center" sx={{ py: 3 }}>
                       <MDBox>
@@ -339,31 +336,34 @@ const SubscriptionTable = ({
         </Table>
       </TableContainer>
 
-      {/* --- زر جلب المزيد أو رسالة اكتمال البيانات --- */}
-      <MDBox sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-        {hasMore ? (
-          <Button
-            variant="contained"
-            color="primary" // يمكنك استخدام "info" أو أي لون آخر من MD
+      {/* --- قسم زر جلب المزيد أو رسالة اكتمال البيانات (مُعدل ليطابق LegacySubscriptionsTable) --- */}
+      <MDBox sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 2 }}>
+        {!loading && subscriptions.length > 0 && hasMore && (
+          <MDButton
+            variant="outlined"
+            color="info"
             onClick={onLoadMore}
-            disabled={loadingMore || loading} // تعطيل أثناء التحميل الأولي أو تحميل المزيد
+            disabled={loadingMore}
             startIcon={
               loadingMore ? <CircularProgress size={20} color="inherit" /> : <ExpandMoreIcon />
             }
-            sx={{ textTransform: "none" }}
           >
-            {loadingMore ? "جاري التحميل..." : "جلب المزيد"}
-          </Button>
-        ) : (
-          subscriptions &&
-          subscriptions.length > 0 && ( // لا تعرض هذه الرسالة إذا لم يكن هناك بيانات أصلاً
-            <MDTypography variant="body2" color="textSecondary">
-              تم جلب كل البيانات
-            </MDTypography>
-          )
+            {loadingMore ? "Loading..." : "Load More"}
+          </MDButton>
+        )}
+
+        {!loading && subscriptions.length > 0 && !hasMore && (
+          <Typography
+            variant="body2"
+            color="textSecondary"
+            sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+          >
+            <CheckCircleOutlineIcon fontSize="small" color="success" />
+            All data loaded. ({subscriptions.length} of {totalCount})
+          </Typography>
         )}
       </MDBox>
-      {/* --- نهاية زر جلب المزيد --- */}
+      {/* --- نهاية قسم زر جلب المزيد --- */}
     </MDBox>
   );
 };
