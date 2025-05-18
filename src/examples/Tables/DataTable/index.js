@@ -29,22 +29,35 @@ function DataTable({
   canSearch,
   showTotalEntries,
   table,
-  pagination,
+  pagination, // { variant, color }
   isSorted,
   noEndBorder,
+  // Props جديدة/معدلة لـ manual pagination
+  manualPagination, // Boolean: هل التنقل يدوي (من الخادم)؟
+  pageCount: controlledPageCount, // العدد الإجمالي للصفحات من الخادم
+  page: controlledPageIndex, // الصفحة الحالية (0-indexed) من الخادم
+  onPageChange, // دالة تُستدعى عند تغيير الصفحة (تمرر رقم الصفحة الجديد 0-indexed)
+  onEntriesPerPageChange, // دالة تُستدعى عند تغيير عدد الإدخالات لكل صفحة
 }) {
-  const defaultValue = entriesPerPage.defaultValue ? entriesPerPage.defaultValue : 10;
-  const entries = entriesPerPage.entries
-    ? entriesPerPage.entries.map((el) => el.toString())
-    : ["5", "10", "15", "20", "25"];
-  const columns = useMemo(() => table.columns, [table]);
-  const data = useMemo(() => table.rows, [table]);
+  const { columns, rows: data } = table; // rows من table هي بيانات الصفحة الحالية فقط
 
+  // إذا كان التنقل يدويًا، فإننا لا نريد لـ usePagination أن يحاول حساب الصفحات
+  // بناءً على البيانات المحدودة التي نمررها له.
+  // نمرر له pageCount الذي حصلنا عليه من الخادم.
   const tableInstance = useTable(
-    { columns, data, initialState: { pageIndex: 0 } },
+    {
+      columns,
+      data, // هذه هي بيانات الصفحة الحالية فقط
+      initialState: {
+        pageIndex: manualPagination ? controlledPageIndex : 0, // استخدم الصفحة المتحكم بها إذا كان التنقل يدويًا
+        pageSize: entriesPerPage.defaultValue || 10,
+      },
+      manualPagination: manualPagination, // أخبر react-table أن التنقل يدوي
+      pageCount: manualPagination ? controlledPageCount : undefined, // أخبر react-table بالعدد الإجمالي للصفحات
+    },
     useGlobalFilter,
     useSortBy,
-    usePagination
+    usePagination // لا يزال مطلوبًا للوصول إلى gotoPage, setPageSize إلخ.
   );
 
   const {
@@ -52,59 +65,92 @@ function DataTable({
     getTableBodyProps,
     headerGroups,
     prepareRow,
-    rows,
-    page,
-    pageOptions,
-    canPreviousPage,
-    canNextPage,
-    gotoPage,
-    nextPage,
-    previousPage,
+    rows, // rows هنا هي نفس data التي مررناها (بيانات الصفحة الحالية)
+    page, // page هنا ستكون هي نفسها rows في حالة manualPagination إذا كان pageCount = 1
+    // pageOptions, // لا نعتمد على هذه بشكل مباشر لعرض الأزرار في manualPagination
+    // canPreviousPage, // سنحسبها بناءً على controlledPageIndex
+    // canNextPage, // سنحسبها بناءً على controlledPageIndex
+    // gotoPage, // سنستخدم onPageChange
+    // nextPage, // سنستخدم onPageChange
+    // previousPage, // سنستخدم onPageChange
     setPageSize,
     setGlobalFilter,
-    state: { pageIndex, pageSize, globalFilter },
+    state: { pageIndex: internalPageIndex, pageSize, globalFilter }, // internalPageIndex هو ما يعتقده usePagination
   } = tableInstance;
 
-  // Set the default value for the entries per page when component mounts
-  useEffect(() => setPageSize(defaultValue || 10), [defaultValue]);
+  // استخدم القيم المتحكم بها إذا كان التنقل يدويًا
+  const currentPageIndex = manualPagination ? controlledPageIndex : internalPageIndex;
+  const totalPages = manualPagination ? controlledPageCount : tableInstance.pageOptions.length;
 
-  // Set the entries per page value based on the select value
-  const setEntriesPerPage = (value) => setPageSize(value);
+  const canGoPreviousPage = currentPageIndex > 0;
+  const canGoNextPage = currentPageIndex < totalPages - 1;
+
+  // Set the default value for the entries per page when component mounts
+  useEffect(() => {
+    if (entriesPerPage.defaultValue) {
+      setPageSize(entriesPerPage.defaultValue);
+      if (manualPagination && onEntriesPerPageChange) {
+        // إذا كان التنقل يدويًا، أبلغ المكون الأصلي بتغيير حجم الصفحة أيضًا
+        // onEntriesPerPageChange(entriesPerPage.defaultValue); // قد يسبب حلقة إذا لم يتم التعامل معه بحذر
+      }
+    }
+  }, [entriesPerPage.defaultValue, setPageSize, manualPagination, onEntriesPerPageChange]);
+
+  const handleSetEntriesPerPage = (value) => {
+    const newPageSize = parseInt(value, 10);
+    setPageSize(newPageSize); // لـ react-table الداخلي
+    if (manualPagination && onEntriesPerPageChange) {
+      onEntriesPerPageChange(newPageSize); // أبلغ المكون الأصلي
+    } else if (!manualPagination) {
+      // إذا كان التنقل داخليًا، انتقل إلى الصفحة الأولى عند تغيير حجم الصفحة
+      tableInstance.gotoPage(0);
+    }
+  };
 
   // Render the paginations
-  const renderPagination = pageOptions.map((option) => (
-    <MDPagination
-      item
-      key={option}
-      onClick={() => gotoPage(Number(option))}
-      active={pageIndex === option}
-    >
-      {option + 1}
-    </MDPagination>
-  ));
+  const renderCustomPagination = () => {
+    if (totalPages <= 1) return null;
 
-  // Handler for the input to set the pagination index
-  const handleInputPagination = ({ target: { value } }) =>
-    value > pageOptions.length || value < 0 ? gotoPage(0) : gotoPage(Number(value));
+    const pageNumbers = [];
+    // منطق لعرض أرقام الصفحات (يمكن تحسينه لعرض "..." للصفحات الكثيرة)
+    // مثال بسيط:
+    const MAX_PAGES_SHOWN = 5; // أقصى عدد أزرار صفحات تظهر
+    let startPage = Math.max(0, currentPageIndex - Math.floor(MAX_PAGES_SHOWN / 2));
+    let endPage = Math.min(totalPages - 1, startPage + MAX_PAGES_SHOWN - 1);
 
-  // Customized page options starting from 1
-  const customizedPageOptions = pageOptions.map((option) => option + 1);
+    if (endPage - startPage + 1 < MAX_PAGES_SHOWN) {
+      startPage = Math.max(0, endPage - MAX_PAGES_SHOWN + 1);
+    }
 
-  // Setting value for the pagination input
-  const handleInputPaginationValue = ({ target: value }) => gotoPage(Number(value.value - 1));
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(
+        <MDPagination
+          item
+          key={i}
+          onClick={() => (manualPagination ? onPageChange(i) : tableInstance.gotoPage(i))}
+          active={currentPageIndex === i}
+        >
+          {i + 1}
+        </MDPagination>
+      );
+    }
+    // يمكنك إضافة "..." هنا إذا لزم الأمر
+
+    return pageNumbers;
+  };
 
   // Search input value state
   const [search, setSearch] = useState(globalFilter);
 
   // Search input state handle
-  const onSearchChange = useAsyncDebounce((value) => {
+  const onSearchChangeDebounced = useAsyncDebounce((value) => {
+    // إذا كان البحث يدويًا أيضًا (لم يتم تطبيقه هنا)، ستحتاج لتمرير هذا للخارج
     setGlobalFilter(value || undefined);
   }, 100);
 
   // A function that sets the sorted value for the table
   const setSortedValue = (column) => {
     let sortedValue;
-
     if (isSorted && column.isSorted) {
       sortedValue = column.isSortedDesc ? "desc" : "asce";
     } else if (isSorted) {
@@ -112,69 +158,74 @@ function DataTable({
     } else {
       sortedValue = false;
     }
-
     return sortedValue;
   };
 
-  // Setting the entries starting point
-  const entriesStart = pageIndex === 0 ? pageIndex + 1 : pageIndex * pageSize + 1;
-
-  // Setting the entries ending point
-  let entriesEnd;
-
-  if (pageIndex === 0) {
-    entriesEnd = pageSize;
-  } else if (pageIndex === pageOptions.length - 1) {
-    entriesEnd = rows.length;
-  } else {
-    entriesEnd = pageSize * (pageIndex + 1);
-  }
+  // معلومات الإدخالات المعروضة
+  // في حالة manualPagination، rows.length هو عدد سجلات الصفحة الحالية (pageSizeApi)
+  // و totalRecords يجب أن يأتيك من props إذا أردت عرضه بشكل دقيق
+  // حاليًا، `DataTable` لا يتلقى `totalRecords` كـ prop.
+  // `PaymentsPage` هو الذي يعرض "إجمالي السجلات".
+  // يمكننا تعديل هذا ليكون أكثر دقة إذا مررنا totalRecords
+  const entriesStart = currentPageIndex * pageSize + 1;
+  const entriesEnd = Math.min(
+    (currentPageIndex + 1) * pageSize,
+    data.length + currentPageIndex * pageSize
+  ); // هذا صحيح لبيانات الصفحة الحالية
+  // إذا أردت عرض "of totalRecords" هنا، ستحتاج لـ totalRecords prop.
 
   return (
     <TableContainer sx={{ boxShadow: "none" }}>
-      {entriesPerPage || canSearch ? (
+      {/* --- قسم التحكم في عدد الإدخالات والبحث --- */}
+      {(entriesPerPage || canSearch) && (
         <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>
           {entriesPerPage && (
             <MDBox display="flex" alignItems="center">
               <Autocomplete
                 disableClearable
                 value={pageSize.toString()}
-                options={entries}
+                options={
+                  entriesPerPage.options
+                    ? entriesPerPage.options.map((o) => o.toString())
+                    : ["10", "20", "50"]
+                }
                 onChange={(event, newValue) => {
-                  setEntriesPerPage(parseInt(newValue, 10));
+                  handleSetEntriesPerPage(newValue);
                 }}
                 size="small"
                 sx={{ width: "5rem" }}
                 renderInput={(params) => <MDInput {...params} />}
               />
               <MDTypography variant="caption" color="secondary">
-                &nbsp;&nbsp;entries per page
+                entries per page
               </MDTypography>
             </MDBox>
           )}
-          {canSearch && (
+          {canSearch && ( // البحث هنا هو بحث react-table الداخلي
             <MDBox width="12rem" ml="auto">
               <MDInput
                 placeholder="Search..."
-                value={search}
+                value={search || ""}
                 size="small"
                 fullWidth
                 onChange={({ currentTarget }) => {
-                  setSearch(search);
-                  onSearchChange(currentTarget.value);
+                  setSearch(currentTarget.value);
+                  onSearchChangeDebounced(currentTarget.value);
                 }}
               />
             </MDBox>
           )}
         </MDBox>
-      ) : null}
+      )}
+
+      {/* --- الجدول --- */}
       <Table {...getTableProps()}>
         <MDBox component="thead">
-          {headerGroups.map((headerGroup, key) => (
-            <TableRow key={key} {...headerGroup.getHeaderGroupProps()}>
-              {headerGroup.headers.map((column, idx) => (
+          {headerGroups.map((headerGroup) => (
+            <TableRow key={headerGroup.id} {...headerGroup.getHeaderGroupProps()}>
+              {headerGroup.headers.map((column) => (
                 <DataTableHeadCell
-                  key={idx}
+                  key={column.id}
                   {...column.getHeaderProps(isSorted && column.getSortByToggleProps())}
                   width={column.width ? column.width : "auto"}
                   align={column.align ? column.align : "left"}
@@ -187,14 +238,15 @@ function DataTable({
           ))}
         </MDBox>
         <TableBody {...getTableBodyProps()}>
-          {page.map((row, key) => {
+          {page.map((row, i) => {
+            // page هنا هي صفوف الصفحة الحالية من react-table
             prepareRow(row);
             return (
-              <TableRow key={key} {...row.getRowProps()}>
-                {row.cells.map((cell, idx) => (
+              <TableRow key={row.id || i} {...row.getRowProps()}>
+                {row.cells.map((cell) => (
                   <DataTableBodyCell
-                    key={idx}
-                    noBorder={noEndBorder && rows.length - 1 === key}
+                    key={cell.id}
+                    noBorder={noEndBorder && i === page.length - 1}
                     align={cell.column.align ? cell.column.align : "left"}
                     {...cell.getCellProps()}
                   >
@@ -207,43 +259,55 @@ function DataTable({
         </TableBody>
       </Table>
 
+      {/* --- قسم التنقل --- */}
       <MDBox
         display="flex"
         flexDirection={{ xs: "column", sm: "row" }}
         justifyContent="space-between"
         alignItems={{ xs: "flex-start", sm: "center" }}
-        p={!showTotalEntries && pageOptions.length === 1 ? 0 : 3}
+        p={totalPages <= 1 && !showTotalEntries ? 0 : 3}
       >
-        {showTotalEntries && (
-          <MDBox mb={{ xs: 3, sm: 0 }}>
-            <MDTypography variant="button" color="secondary" fontWeight="regular">
-              Showing {entriesStart} to {entriesEnd} of {rows.length} entries
-            </MDTypography>
-          </MDBox>
-        )}
-        {pageOptions.length > 1 && (
+        {showTotalEntries &&
+          data.length > 0 && ( // أظهر فقط إذا كانت هناك بيانات
+            <MDBox mb={{ xs: 3, sm: 0 }}>
+              <MDTypography variant="button" color="secondary" fontWeight="regular">
+                {/* هذا النص يعتمد على totalRecords الكلي الذي يجب أن يمرر */}
+                Showing {entriesStart} to {entriesEnd} of{" "}
+                {manualPagination
+                  ? controlledPageIndex * pageSize + data.length
+                  : tableInstance.rows.length}{" "}
+                entries
+                {/* إذا أردت عرض الإجمالي الحقيقي، ستحتاج لتمرير totalRecords من PaymentsPage */}
+              </MDTypography>
+            </MDBox>
+          )}
+        {totalPages > 1 && (
           <MDPagination
             variant={pagination.variant ? pagination.variant : "gradient"}
             color={pagination.color ? pagination.color : "info"}
           >
-            {canPreviousPage && (
-              <MDPagination item onClick={() => previousPage()}>
+            {canGoPreviousPage && (
+              <MDPagination
+                item
+                onClick={() =>
+                  manualPagination
+                    ? onPageChange(currentPageIndex - 1)
+                    : tableInstance.previousPage()
+                }
+              >
                 <Icon sx={{ fontWeight: "bold" }}>chevron_left</Icon>
               </MDPagination>
             )}
-            {renderPagination.length > 6 ? (
-              <MDBox width="5rem" mx={1}>
-                <MDInput
-                  inputProps={{ type: "number", min: 1, max: customizedPageOptions.length }}
-                  value={customizedPageOptions[pageIndex]}
-                  onChange={(handleInputPagination, handleInputPaginationValue)}
-                />
-              </MDBox>
-            ) : (
-              renderPagination
-            )}
-            {canNextPage && (
-              <MDPagination item onClick={() => nextPage()}>
+            {/* {renderPagination.length > 6 ? ( ... ) : renderPagination}  */}
+            {/* استبدل هذا بـ renderCustomPagination */}
+            {renderCustomPagination()}
+            {canGoNextPage && (
+              <MDPagination
+                item
+                onClick={() =>
+                  manualPagination ? onPageChange(currentPageIndex + 1) : tableInstance.nextPage()
+                }
+              >
                 <Icon sx={{ fontWeight: "bold" }}>chevron_right</Icon>
               </MDPagination>
             )}
@@ -254,28 +318,30 @@ function DataTable({
   );
 }
 
-// Setting default values for the props of DataTable
 DataTable.defaultProps = {
-  entriesPerPage: { defaultValue: 10, entries: [5, 10, 15, 20, 25] },
+  entriesPerPage: { defaultValue: 10, options: [10, 20, 50, 100] }, // تأكد أن options موجودة
   canSearch: false,
   showTotalEntries: true,
   pagination: { variant: "gradient", color: "info" },
   isSorted: true,
   noEndBorder: false,
+  manualPagination: false, // القيمة الافتراضية
+  pageCount: 0,
+  page: 0,
 };
 
-// Typechecking props for the DataTable
 DataTable.propTypes = {
-  entriesPerPage: PropTypes.oneOfType([
-    PropTypes.shape({
-      defaultValue: PropTypes.number,
-      entries: PropTypes.arrayOf(PropTypes.number),
-    }),
-    PropTypes.bool,
-  ]),
+  entriesPerPage: PropTypes.shape({
+    // تم تعديل الشكل ليتضمن options
+    defaultValue: PropTypes.number,
+    options: PropTypes.arrayOf(PropTypes.oneOfType([PropTypes.string, PropTypes.number])),
+  }),
   canSearch: PropTypes.bool,
   showTotalEntries: PropTypes.bool,
-  table: PropTypes.objectOf(PropTypes.array).isRequired,
+  table: PropTypes.shape({
+    columns: PropTypes.arrayOf(PropTypes.object).isRequired,
+    rows: PropTypes.arrayOf(PropTypes.object).isRequired,
+  }).isRequired,
   pagination: PropTypes.shape({
     variant: PropTypes.oneOf(["contained", "gradient"]),
     color: PropTypes.oneOf([
@@ -291,6 +357,12 @@ DataTable.propTypes = {
   }),
   isSorted: PropTypes.bool,
   noEndBorder: PropTypes.bool,
+  // Props جديدة لـ manual pagination
+  manualPagination: PropTypes.bool,
+  pageCount: PropTypes.number, // العدد الإجمالي للصفحات
+  page: PropTypes.number, // الصفحة الحالية (0-indexed)
+  onPageChange: PropTypes.func,
+  onEntriesPerPageChange: PropTypes.func,
 };
 
 export default DataTable;

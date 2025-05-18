@@ -7,7 +7,7 @@ import {
   IconButton,
   Tooltip,
   Grid,
-  Box,
+  Box, // Kept for Pending Tab toolbar if needed
   Chip as MuiChip,
   Dialog,
   DialogTitle,
@@ -20,10 +20,13 @@ import {
   ListItemText,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ListAltIcon from "@mui/icons-material/ListAlt";
+import EditIcon from "@mui/icons-material/Edit";
+// import PendingActionsIcon from "@mui/icons-material/PendingActions"; // Not used in the provided code directly
+// import CheckCircleIcon from "@mui/icons-material/CheckCircle"; // Not used in the provided code directly
+// import ListAltIcon from "@mui/icons-material/ListAlt"; // Not used in the provided code directly
 import PlaylistPlayIcon from "@mui/icons-material/PlaylistPlay";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+// Icons for Legacy Filter Options are expected to be part of LEGACY_PROCESSED_FILTER_OPTIONS in config
 
 import MuiAlert from "@mui/material/Alert";
 import MDBox from "components/MDBox";
@@ -35,6 +38,9 @@ import MDTypography from "components/MDTypography";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
+// --- DataTable ---
+import DataTable from "examples/Tables/DataTable";
+
 // Hooks
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { usePendingSubscriptions } from "./hooks/usePendingSubscriptions";
@@ -43,115 +49,121 @@ import { useLegacySubscriptions } from "./hooks/useLegacySubscriptions";
 // Components
 import TabsManager from "./components/TabsManager";
 import SubscriptionTableToolbar from "./components/SubscriptionTableToolbar";
-import SubscriptionTable from "./components/SubscriptionTable";
 import SubscriptionFormModal from "./components/SubscriptionFormModal";
-import PendingSubscriptionsTable from "./components/PendingSubscriptionsTable";
-import LegacySubscriptionsTable from "./components/LegacySubscriptionsTable";
 
 // API
 import {
   getSubscriptionTypes,
   getSubscriptionSources,
-  addSubscription,
-  updateSubscription,
+  addSubscription, // Assuming this is used somewhere, keeping it.
+  updateSubscription, // Assuming this is used somewhere, keeping it.
 } from "./services/api";
+
+// Configs and Utils
+import { BASE_COLUMNS_CONFIG_SUBS } from "./config/subscriptions.config";
+import { formatSubStatus, formatSubDate } from "./utils/subscriptions.utils";
+import {
+  BASE_COLUMNS_CONFIG_PENDING,
+  PENDING_STATUS_FILTER_OPTIONS,
+} from "./config/pending.config.js";
+import { formatPendingStatus, formatPendingDate } from "./utils/pending.utils.js";
+import {
+  BASE_COLUMNS_CONFIG_LEGACY,
+  LEGACY_PROCESSED_FILTER_OPTIONS,
+} from "./config/legacy.config.js";
+import { formatLegacyProcessedStatus, formatLegacyDate } from "./utils/legacy.utils.js";
 
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
 
+const centeredContentStyle = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  py: 4,
+  minHeight: "300px",
+};
+
 function Tables() {
   const [activeTab, setActiveTab] = useState(0);
   const [formModalOpen, setFormModalOpen] = useState(false);
-  const [selectedSubscription, setSelectedSubscription] = useState(null);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
+  const [editingSubscription, setEditingSubscription] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const [globalSearchTerm, setGlobalSearchTerm] = useState("");
 
-  const showSnackbar = useCallback((message, severity = "success") => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
+  const showSnackbar = useCallback((message, severity = "info") => {
+    setSnackbar({ open: true, message, severity });
   }, []);
 
   const handleCloseSnackbar = (event, reason) => {
     if (reason === "clickaway") return;
-    setSnackbarOpen(false);
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
+  // --- Subscriptions Tab (Tab 0) ---
   const {
-    fetchInitialData: fetchSubsData,
-    handleFilterChange: handleSubsFilterChange,
-    handleRequestSort: handleSubsRequestSort,
-    handleChangeRowsPerPage: handleSubsRowsPerPageChange, // هذا سيمرر إلى SubscriptionTable
-    handleLoadMore: handleSubsLoadMore,
     subscriptions,
     loading: subsLoading,
-    loadingMore: subsLoadingMore,
     error: subsError,
     setError: setSubsError,
-    filters: subsFilters,
-    // setFilters: setSubsFilters, // لم يعد يمرر إلى Toolbar، الهوك يستخدمه داخليًا
-    order: subsOrder,
-    orderBy: subsOrderBy,
-    totalSubscriptions: subsTotal,
-    rowsPerPage: subsRowsPerPage, // هذا سيمرر إلى SubscriptionTable
-    hasMoreData: subsHasMore,
-  } = useSubscriptions(showSnackbar);
+    tableQueryOptions: subsQueryOptions,
+    setTableQueryOptions: setSubsQueryOptions,
+    totalRecords: subsTotalRecords,
+    activeSubscriptionsCount: subsActiveCount, // subsActiveCount might not be used if not displayed
+    customFilters: subsCustomFilters,
+    handleCustomFilterChange: handleSubsCustomFilterChange,
+    setSearchTerm: setSubsSearchTerm,
+  } = useSubscriptions(showSnackbar, globalSearchTerm);
 
+  // --- Pending Subscriptions Tab (Tab 1) ---
   const {
-    fetchInitialLegacySubscriptions: fetchLegacyData,
-    fetchLegacyCountForTabsManager,
-    handleLoadMoreLegacy,
-    handleLegacyFilterChange: handleLegacyFilterAction,
-    handleLegacyRequestSort: handleLegacySortAction,
-    legacyInitialData,
-    legacyTotalCount,
-    legacyLoadingInitial,
-    activeLegacyFilter,
-    legacyOrder,
-    legacyOrderBy,
-    legacyCountForTabDisplay,
-    ROWS_PER_PAGE_FOR_LOAD_MORE,
-  } = useLegacySubscriptions(showSnackbar);
-
-  const pendingHookRefreshSubs = useCallback(
-    (searchTerm) => fetchSubsData(searchTerm || globalSearchTerm),
-    [fetchSubsData, globalSearchTerm]
-  );
-  const pendingHookRefreshLegacyCount = useCallback(
-    (filterOverride, searchTerm) =>
-      fetchLegacyCountForTabsManager(filterOverride, searchTerm || globalSearchTerm),
-    [fetchLegacyCountForTabsManager, globalSearchTerm]
-  );
-
-  const {
-    fetchPendingSubscriptionsData,
-    fetchPendingStats,
-    setPendingPage,
-    handlePendingFilterChange: handlePendingFilterAction,
-    handlePendingPageChange: handlePendingPageAction,
-    handlePendingRowsPerPageChange: handlePendingRowsPerPageAction,
-    handleMarkPendingComplete,
-    handleBulkProcessPending,
-    handleCloseBulkResultModal,
-    pendingSubscriptions,
-    pendingPage,
-    pendingRowsPerPage,
-    pendingTotal,
-    pendingLoading,
-    pendingStats,
-    currentPendingFilter,
+    pendingData,
+    loading: pendingLoadingState,
+    error: pendingError,
+    setError: setPendingError,
+    tableQueryOptions: pendingQueryOptions,
+    setTableQueryOptions: setPendingQueryOptions,
+    totalRecords: pendingTotalRecords,
+    stats: pendingStatsData,
+    statusFilter: pendingStatusFilter,
+    handleStatusFilterChange: handlePendingStatusFilterChange,
+    setSearchTerm: setPendingSearchTerm,
+    handleMarkComplete: handlePendingMarkCompleteInternal,
     bulkProcessingLoading,
     bulkProcessResult,
     bulkResultModalOpen,
+    handleBulkProcess: handlePendingBulkProcessInternal,
+    handleCloseBulkResultModal,
+    fetchStats: fetchPendingStatsHook,
   } = usePendingSubscriptions(
     showSnackbar,
-    pendingHookRefreshSubs,
-    pendingHookRefreshLegacyCount,
-    pendingHookRefreshSubs // كان هناك pendingHookRefreshSubs مرتين، يفترض أن تكون واحدة منهم لشيء آخر أو خطأ مطبعي
+    async (searchTerm) => {
+      if (activeTab !== 0) {
+        setSubsSearchTerm((prev) => prev + " ");
+        setSubsSearchTerm(searchTerm);
+      }
+    }, // This logic might need review based on how global search is intended to work across tabs
+    async (filterOverride, searchTerm) => {
+      /* For legacy count refresh - now handled by legacy hook */
+    }
   );
+
+  // --- Legacy Subscriptions Tab (Tab 2) ---
+  const {
+    legacyData,
+    loading: legacyLoadingState,
+    error: legacyError,
+    setError: setLegacyError,
+    tableQueryOptions: legacyQueryOptions,
+    setTableQueryOptions: setLegacyQueryOptions,
+    totalRecords: legacyTotalRecords,
+    processedLegacyCount,
+    processedFilter: legacyProcessedFilter,
+    handleProcessedFilterChange: handleLegacyProcessedFilterChange,
+    setSearchTerm: setLegacySearchTerm,
+    fetchData: fetchLegacyDataHook,
+  } = useLegacySubscriptions(showSnackbar, globalSearchTerm);
 
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
   const [availableSources, setAvailableSources] = useState([]);
@@ -160,113 +172,126 @@ function Tables() {
     const fetchInitialDropdownData = async () => {
       try {
         const typesData = await getSubscriptionTypes();
-        setSubscriptionTypes(typesData);
+        setSubscriptionTypes(typesData || []);
         const sourcesData = await getSubscriptionSources();
-        setAvailableSources(sourcesData);
+        const formattedSources = (sourcesData || []).map((s) => ({
+          value: typeof s === "string" ? s : s.name,
+          label: typeof s === "string" ? s : s.name,
+        }));
+        setAvailableSources(formattedSources);
       } catch (err) {
-        console.error("Error fetching initial dropdown data:", err);
-        showSnackbar("Failed to load some initial data for forms", "error");
+        showSnackbar("Error fetching dropdown data: " + (err.message || "Unknown error"), "error");
       }
     };
     fetchInitialDropdownData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // showSnackbar أضيفت إلى مصفوفة الاعتماديات إذا كانت ثابتة (مع useCallback)
+  }, [showSnackbar]);
+
+  useEffect(() => {
+    if (activeTab === 0) {
+      setSubsSearchTerm(globalSearchTerm);
+    } else if (activeTab === 1) {
+      setPendingSearchTerm(globalSearchTerm);
+    } else if (activeTab === 2) {
+      setLegacySearchTerm(globalSearchTerm);
+    }
+  }, [activeTab, globalSearchTerm, setSubsSearchTerm, setPendingSearchTerm, setLegacySearchTerm]);
 
   const handleGlobalSearchChange = useCallback(
     (value) => {
       setGlobalSearchTerm(value);
-      if (activeTab === 1) {
-        setPendingPage(0); // إعادة تعيين الصفحة عند البحث في Pending
+      // Reset to page 1 for the currently active tab when global search changes
+      if (activeTab === 0) {
+        setSubsQueryOptions((prev) => ({ ...prev, page: 1 }));
+      } else if (activeTab === 1) {
+        setPendingQueryOptions((prev) => ({ ...prev, page: 1 }));
+      } else if (activeTab === 2) {
+        setLegacyQueryOptions((prev) => ({ ...prev, page: 1 }));
       }
-      // ملاحظة: useEffect التالي سيعيد جلب البيانات تلقائيًا عند تغيير globalSearchTerm
     },
-    [activeTab, setPendingPage]
+    [activeTab, setSubsQueryOptions, setPendingQueryOptions, setLegacyQueryOptions]
   );
-
-  useEffect(() => {
-    // console.log(`Fetching data for tab: ${activeTab}, search: "${globalSearchTerm}"`);
-    if (activeTab === 0) {
-      fetchSubsData(globalSearchTerm);
-    } else if (activeTab === 1) {
-      fetchPendingSubscriptionsData(globalSearchTerm); // جلب بيانات Pending
-      fetchPendingStats(); // جلب إحصائيات Pending
-    } else if (activeTab === 2) {
-      fetchLegacyData(globalSearchTerm);
-    }
-  }, [
-    activeTab,
-    globalSearchTerm,
-    fetchSubsData,
-    fetchPendingSubscriptionsData,
-    fetchPendingStats,
-    fetchLegacyData,
-  ]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
-    if (newValue === 1) {
-      // إذا انتقلنا إلى Pending tab
-      setPendingPage(0); // إعادة تعيين الصفحة إلى الأولى
-    }
-    // ملاحظة: useEffect أعلاه سيتولى جلب البيانات للتاب الجديد
+    // Optionally, reset global search term when changing tabs if desired
+    // setGlobalSearchTerm("");
   };
 
-  const handleRefreshDataOptimized = useCallback(async () => {
+  const handleRefreshData = useCallback(async () => {
     showSnackbar("Refreshing data...", "info");
-    try {
-      if (activeTab === 0) {
-        await fetchSubsData(globalSearchTerm);
-      } else if (activeTab === 1) {
-        await Promise.all([fetchPendingStats(), fetchPendingSubscriptionsData(globalSearchTerm)]);
-      } else if (activeTab === 2) {
-        await fetchLegacyData(globalSearchTerm);
+    if (activeTab === 0) {
+      // Trigger re-fetch in useSubscriptions hook
+      setSubsSearchTerm((prev) => prev + " ");
+      setSubsSearchTerm(globalSearchTerm);
+    } else if (activeTab === 1) {
+      // Trigger re-fetch in usePendingSubscriptions hook and stats
+      setPendingSearchTerm((prev) => prev + " ");
+      setPendingSearchTerm(globalSearchTerm);
+      if (fetchPendingStatsHook) await fetchPendingStatsHook();
+    } else if (activeTab === 2) {
+      if (fetchLegacyDataHook) {
+        await fetchLegacyDataHook(legacyQueryOptions, legacyProcessedFilter, globalSearchTerm);
+      } else {
+        // Fallback: Trigger re-fetch in useLegacySubscriptions hook if fetchData isn't exposed or for a simpler refresh
+        setLegacySearchTerm((prev) => prev + " ");
+        setLegacySearchTerm(globalSearchTerm);
       }
-      showSnackbar("Data refreshed!", "success");
-    } catch (error) {
-      console.error("Error refreshing data:", error);
-      showSnackbar("Failed to refresh data.", "error");
     }
   }, [
     activeTab,
     globalSearchTerm,
-    fetchSubsData,
-    fetchPendingStats,
-    fetchPendingSubscriptionsData,
-    fetchLegacyData,
+    setSubsSearchTerm,
+    setPendingSearchTerm,
+    fetchPendingStatsHook,
+    setLegacySearchTerm,
+    fetchLegacyDataHook,
+    legacyQueryOptions,
+    legacyProcessedFilter, // Added dependencies from legacy hook
     showSnackbar,
   ]);
 
   const handleAddNewClick = () => {
-    setSelectedSubscription(null);
+    setEditingSubscription(null);
     setFormModalOpen(true);
   };
-  const handleEditClick = (subscription) => {
-    setSelectedSubscription(subscription);
+
+  const handleEditSubscriptionClick = (subscription) => {
+    setEditingSubscription(subscription);
     setFormModalOpen(true);
   };
+
   const handleCloseModal = () => {
     setFormModalOpen(false);
-    setSelectedSubscription(null);
+    setEditingSubscription(null);
   };
 
   const handleFormSubmit = async (formData) => {
-    const isEditMode = !!selectedSubscription;
+    const isEditMode = !!editingSubscription;
     try {
       if (isEditMode) {
-        await updateSubscription(selectedSubscription.id, formData);
+        await updateSubscription(editingSubscription.id, formData);
         showSnackbar("Subscription updated successfully!", "success");
       } else {
         await addSubscription(formData);
         showSnackbar("Subscription added successfully!", "success");
       }
       handleCloseModal();
-      // إعادة جلب البيانات لجميع التابات لضمان التحديث
-      await fetchSubsData(globalSearchTerm);
-      await fetchPendingStats();
-      await fetchPendingSubscriptionsData(globalSearchTerm);
-      await fetchLegacyData(globalSearchTerm);
+      // Trigger refetch for all potentially affected tabs
+      // A common pattern is to slightly change the search term to force a refetch if the hook depends on it.
+      setSubsSearchTerm((prev) => prev + "_");
+      setSubsSearchTerm(globalSearchTerm);
+      setPendingSearchTerm((prev) => prev + "_");
+      setPendingSearchTerm(globalSearchTerm); // New subs might appear as pending
+      if (fetchPendingStatsHook) await fetchPendingStatsHook(); // Refresh pending stats
+
+      if (fetchLegacyDataHook) {
+        // Refresh legacy data
+        await fetchLegacyDataHook(legacyQueryOptions, legacyProcessedFilter, globalSearchTerm);
+      } else {
+        setLegacySearchTerm((prev) => prev + "_");
+        setLegacySearchTerm(globalSearchTerm);
+      }
     } catch (err) {
-      console.error("Error submitting form:", err);
       const errorMessage =
         err.response?.data?.detail ||
         err.response?.data?.error ||
@@ -276,30 +301,135 @@ function Tables() {
     }
   };
 
-  const isAnyLoading = useMemo(
-    () =>
-      subsLoading ||
-      subsLoadingMore ||
-      pendingLoading ||
-      bulkProcessingLoading ||
-      legacyLoadingInitial,
-    [subsLoading, subsLoadingMore, pendingLoading, bulkProcessingLoading, legacyLoadingInitial]
-  );
+  // --- DataTable Columns for Subscriptions Tab ---
+  const subsDataTableColumns = useMemo(() => {
+    const actionColumn = {
+      Header: "ACTIONS",
+      accessor: "actions",
+      align: "center",
+      disableSortBy: true,
+      Cell: ({ row }) => (
+        <Tooltip title="Edit Subscription">
+          <IconButton
+            size="small"
+            onClick={() => handleEditSubscriptionClick(row.original)}
+            color="info"
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    };
+    const formattedBase = BASE_COLUMNS_CONFIG_SUBS.map((col) => {
+      if (col.accessor === "is_active")
+        return { ...col, Cell: ({ value }) => formatSubStatus(value) };
+      if (col.accessor === "expiry_date" || col.accessor === "start_date")
+        return { ...col, Cell: ({ value }) => formatSubDate(value) };
+      return col;
+    });
+    return [...formattedBase, actionColumn];
+  }, []); // handleEditSubscriptionClick is stable due to useCallback or if defined outside component
 
-  const currentTabLoading = useMemo(
-    () =>
-      (activeTab === 0 && (subsLoading || subsLoadingMore)) ||
-      (activeTab === 1 && (pendingLoading || bulkProcessingLoading)) ||
-      (activeTab === 2 && legacyLoadingInitial),
-    [
-      activeTab,
-      subsLoading,
-      subsLoadingMore,
-      pendingLoading,
-      bulkProcessingLoading,
-      legacyLoadingInitial,
-    ]
+  const subsPageCount = Math.ceil(subsTotalRecords / (subsQueryOptions.pageSize || 20));
+
+  // --- DataTable Columns for Pending Subscriptions Tab ---
+  const pendingDataTableColumns = useMemo(() => {
+    const actionColumn = {
+      Header: "ACTION",
+      accessor: "actions",
+      align: "center",
+      disableSortBy: true,
+      Cell: ({ row }) => {
+        if (row.original.status === "pending") {
+          return (
+            <Tooltip title="Mark as Complete">
+              <MDButton
+                variant="gradient"
+                color="success"
+                size="small"
+                onClick={() => handlePendingMarkCompleteInternal(row.original.id)}
+                startIcon={<CheckCircleOutlineIcon />}
+              >
+                Complete
+              </MDButton>
+            </Tooltip>
+          );
+        }
+        return (
+          <MDTypography
+            variant="caption"
+            color={row.original.status === "complete" ? "success.main" : "text.secondary"}
+            fontWeight="medium"
+            sx={{ textTransform: "capitalize" }}
+          >
+            {row.original.status === "complete" ? "Completed" : row.original.status}
+            {row.original.admin_reviewed_at &&
+              (row.original.status === "complete" ||
+                row.original.status === "approved" ||
+                row.original.status === "rejected") && (
+                <Tooltip
+                  title={`Reviewed: ${formatPendingDate(row.original.admin_reviewed_at, true)}`}
+                >
+                  <MDTypography
+                    variant="caption"
+                    component="div"
+                    sx={{ fontSize: "0.7rem", color: "text.disabled" }}
+                  >
+                    {formatPendingDate(row.original.admin_reviewed_at)}
+                  </MDTypography>
+                </Tooltip>
+              )}
+          </MDTypography>
+        );
+      },
+    };
+    const formattedBase = BASE_COLUMNS_CONFIG_PENDING.map((col) => {
+      if (col.accessor === "status")
+        return { ...col, Cell: ({ value }) => formatPendingStatus(value) };
+      if (col.accessor === "found_at")
+        return { ...col, Cell: ({ value }) => formatPendingDate(value, true) };
+      return col;
+    });
+    return [...formattedBase, actionColumn];
+  }, [handlePendingMarkCompleteInternal]);
+
+  const pendingPageCount = Math.ceil(pendingTotalRecords / (pendingQueryOptions.pageSize || 20));
+
+  // --- DataTable Columns for Legacy Subscriptions Tab ---
+  const legacyDataTableColumns = useMemo(() => {
+    return BASE_COLUMNS_CONFIG_LEGACY.map((col) => {
+      if (col.accessor === "processed") {
+        return { ...col, Cell: ({ value }) => formatLegacyProcessedStatus(value) };
+      }
+      if (col.accessor === "expiry_date" || col.accessor === "created_at") {
+        return { ...col, Cell: ({ value }) => formatLegacyDate(value) };
+      }
+      return col;
+    });
+    // No actions column by default for legacy, add if needed
+  }, []);
+
+  const legacyPageCount = Math.ceil(legacyTotalRecords / (legacyQueryOptions.pageSize || 20));
+
+  // --- Loading States ---
+  const isAnyLoading = useMemo(
+    () => subsLoading || pendingLoadingState || legacyLoadingState,
+    [subsLoading, pendingLoadingState, legacyLoadingState]
   );
+  const currentTabSpinnerOnRefresh = useMemo(() => {
+    if (activeTab === 0) return subsLoading && subscriptions.length > 0;
+    if (activeTab === 1) return pendingLoadingState && pendingData.length > 0;
+    if (activeTab === 2) return legacyLoadingState && legacyData.length > 0;
+    return false;
+  }, [
+    activeTab,
+    subsLoading,
+    subscriptions,
+    pendingLoadingState,
+    pendingData,
+    legacyLoadingState,
+    legacyData,
+  ]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -334,21 +464,22 @@ function Tables() {
                   px={2}
                   py={1}
                   flexWrap="wrap"
+                  sx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}
                 >
                   <TabsManager
                     activeTab={activeTab}
                     handleTabChange={handleTabChange}
-                    pendingCount={pendingStats.pending}
-                    legacyCount={legacyCountForTabDisplay}
+                    pendingCount={pendingStatsData?.pending || 0}
+                    legacyCount={legacyTotalRecords || 0}
                   />
                   <Tooltip title="Refresh Data">
                     <IconButton
-                      onClick={handleRefreshDataOptimized}
+                      onClick={handleRefreshData}
                       color="info"
                       disabled={isAnyLoading}
                       sx={{ ml: "auto" }}
                     >
-                      {currentTabLoading ? (
+                      {currentTabSpinnerOnRefresh ? (
                         <CircularProgress size={24} color="inherit" />
                       ) : (
                         <RefreshIcon />
@@ -361,18 +492,16 @@ function Tables() {
                 {activeTab === 0 && (
                   <>
                     <SubscriptionTableToolbar
-                      onFilterChange={(newFilters) =>
-                        handleSubsFilterChange(newFilters, globalSearchTerm)
-                      }
-                      filters={subsFilters} // تمرير الفلاتر الحالية
-                      // setFilters prop removed as it's not needed by Toolbar
-                      subscriptionTypes={subscriptionTypes}
-                      onAddNewClick={handleAddNewClick}
+                      onFilterChange={(newFilters) => handleSubsCustomFilterChange(newFilters)}
+                      filters={subsCustomFilters}
+                      subscriptionTypes={(subscriptionTypes || []).map((st) => ({
+                        value: st.id,
+                        label: st.name,
+                      }))}
+                      onAddNewClick={handleAddNewClick} // This prop might be redundant if button is in header
                       availableSources={availableSources}
-                      // rowsPerPage and onRowsPerPageChange are not passed to Toolbar
-                      // They will be passed to SubscriptionTable instead if needed
                     />
-                    {subsError && !subsLoading && !subsLoadingMore && (
+                    {subsError && !subsLoading && (
                       <MDBox px={3} py={1}>
                         <MuiAlert
                           severity="error"
@@ -383,22 +512,45 @@ function Tables() {
                         </MuiAlert>
                       </MDBox>
                     )}
-                    <SubscriptionTable
-                      subscriptions={subscriptions}
-                      onEditClick={handleEditClick}
-                      totalCount={subsTotal}
-                      order={subsOrder}
-                      orderBy={subsOrderBy}
-                      onRequestSort={(event, property) =>
-                        handleSubsRequestSort(event, property, globalSearchTerm)
-                      }
-                      loading={subsLoading}
-                      loadingMore={subsLoadingMore}
-                      onLoadMore={() => handleSubsLoadMore(globalSearchTerm)}
-                      hasMore={subsHasMore}
-                      rowsPerPage={subsRowsPerPage} // <<< تمرير هنا
-                      onRowsPerPageChange={(e) => handleSubsRowsPerPageChange(e, globalSearchTerm)} // <<< تمرير هنا
-                    />
+                    <MDBox pt={1} sx={{ position: "relative" }}>
+                      {subsLoading && subscriptions.length === 0 && (
+                        <MDBox sx={centeredContentStyle}>
+                          <CircularProgress color="info" />
+                        </MDBox>
+                      )}
+                      {(!subsLoading && subscriptions.length > 0) ||
+                      (subsLoading && subscriptions.length > 0) ? (
+                        <DataTable
+                          table={{ columns: subsDataTableColumns, rows: subscriptions }}
+                          isSorted={false}
+                          entriesPerPage={{
+                            defaultValue: subsQueryOptions.pageSize,
+                            options: [10, 20, 50, 100],
+                          }}
+                          showTotalEntries={subsTotalRecords > 0}
+                          noEndBorder
+                          canSearch={false}
+                          pagination={{ variant: "gradient", color: "info" }}
+                          manualPagination
+                          pageCount={subsPageCount > 0 ? subsPageCount : 1}
+                          page={subsQueryOptions.page - 1}
+                          onPageChange={(newPage) => setSubsQueryOptions({ page: newPage + 1 })}
+                          onEntriesPerPageChange={(newPageSize) =>
+                            setSubsQueryOptions({ pageSize: newPageSize, page: 1 })
+                          }
+                          sx={subsLoading && subscriptions.length > 0 ? { opacity: 0.7 } : {}}
+                        />
+                      ) : (
+                        !subsLoading &&
+                        subscriptions.length === 0 && (
+                          <MDBox sx={centeredContentStyle}>
+                            <MDTypography variant="h6" color="textSecondary">
+                              No subscriptions found.
+                            </MDTypography>
+                          </MDBox>
+                        )
+                      )}
+                    </MDBox>
                   </>
                 )}
 
@@ -417,42 +569,34 @@ function Tables() {
                         <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mr: 1 }}>
                           Status:
                         </MDTypography>
-                        <MuiChip
-                          label={`Pending (${pendingStats.pending || 0})`}
-                          icon={<PendingActionsIcon />}
-                          clickable
-                          color={currentPendingFilter === "pending" ? "primary" : "default"}
-                          onClick={() => handlePendingFilterAction("pending", globalSearchTerm)}
-                          variant={currentPendingFilter === "pending" ? "filled" : "outlined"}
-                          size="small"
-                        />
-                        <MuiChip
-                          label={`Complete (${pendingStats.complete || 0})`}
-                          icon={<CheckCircleIcon />}
-                          clickable
-                          color={currentPendingFilter === "complete" ? "primary" : "default"}
-                          onClick={() => handlePendingFilterAction("complete", globalSearchTerm)}
-                          variant={currentPendingFilter === "complete" ? "filled" : "outlined"}
-                          size="small"
-                        />
-                        <MuiChip
-                          label={`All (${pendingStats.total_all || 0})`}
-                          icon={<ListAltIcon />}
-                          clickable
-                          color={currentPendingFilter === "all" ? "primary" : "default"}
-                          onClick={() => handlePendingFilterAction("all", globalSearchTerm)}
-                          variant={currentPendingFilter === "all" ? "filled" : "outlined"}
-                          size="small"
-                        />
+                        {PENDING_STATUS_FILTER_OPTIONS.map((opt) => {
+                          const count =
+                            opt.value === "all"
+                              ? pendingStatsData.total_all
+                              : pendingStatsData[opt.value];
+                          const IconComponent = opt.icon; // Assuming opt.icon is the component
+                          return (
+                            <MuiChip
+                              key={opt.value}
+                              label={`${opt.label} (${count || 0})`}
+                              icon={IconComponent ? <IconComponent fontSize="small" /> : null}
+                              clickable
+                              color={pendingStatusFilter === opt.value ? "primary" : "default"}
+                              onClick={() => handlePendingStatusFilterChange(opt.value)}
+                              variant={pendingStatusFilter === opt.value ? "filled" : "outlined"}
+                              size="small"
+                            />
+                          );
+                        })}
                       </Box>
                       <MDButton
                         variant="gradient"
                         color="info"
-                        onClick={() => handleBulkProcessPending(globalSearchTerm)}
+                        onClick={handlePendingBulkProcessInternal}
                         disabled={
                           bulkProcessingLoading ||
-                          pendingLoading ||
-                          currentPendingFilter !== "pending"
+                          pendingLoadingState ||
+                          pendingStatusFilter !== "pending"
                         }
                         startIcon={
                           bulkProcessingLoading ? (
@@ -466,43 +610,146 @@ function Tables() {
                         {bulkProcessingLoading ? "Processing All..." : "Process All Pending"}
                       </MDButton>
                     </MDBox>
-                    <PendingSubscriptionsTable
-                      pendingSubscriptions={pendingSubscriptions}
-                      page={pendingPage}
-                      rowsPerPage={pendingRowsPerPage}
-                      onPageChange={(event, newPage) =>
-                        handlePendingPageAction(event, newPage, globalSearchTerm)
-                      }
-                      onRowsPerPageChange={(event) =>
-                        handlePendingRowsPerPageAction(event, globalSearchTerm)
-                      }
-                      onMarkComplete={(id) => handleMarkPendingComplete(id, globalSearchTerm)}
-                      totalCount={pendingTotal}
-                      loading={pendingLoading}
-                    />
+                    {pendingError && !pendingLoadingState && (
+                      <MDBox px={3} py={1}>
+                        <MuiAlert
+                          severity="error"
+                          onClose={() => setPendingError(null)}
+                          sx={{ width: "100%" }}
+                        >
+                          {pendingError}
+                        </MuiAlert>
+                      </MDBox>
+                    )}
+                    <MDBox pt={1} sx={{ position: "relative" }}>
+                      {pendingLoadingState && pendingData.length === 0 && (
+                        <MDBox sx={centeredContentStyle}>
+                          <CircularProgress color="info" />
+                        </MDBox>
+                      )}
+                      {(!pendingLoadingState && pendingData.length > 0) ||
+                      (pendingLoadingState && pendingData.length > 0) ? (
+                        <DataTable
+                          table={{ columns: pendingDataTableColumns, rows: pendingData }}
+                          isSorted={false}
+                          entriesPerPage={{
+                            defaultValue: pendingQueryOptions.pageSize,
+                            options: [10, 20, 50, 100],
+                          }}
+                          showTotalEntries={pendingTotalRecords > 0}
+                          noEndBorder
+                          canSearch={false}
+                          pagination={{ variant: "gradient", color: "info" }}
+                          manualPagination
+                          pageCount={pendingPageCount > 0 ? pendingPageCount : 1}
+                          page={pendingQueryOptions.page - 1}
+                          onPageChange={(newPage) => setPendingQueryOptions({ page: newPage + 1 })}
+                          onEntriesPerPageChange={(newPageSize) =>
+                            setPendingQueryOptions({ pageSize: newPageSize, page: 1 })
+                          }
+                          sx={pendingLoadingState && pendingData.length > 0 ? { opacity: 0.7 } : {}}
+                        />
+                      ) : (
+                        !pendingLoadingState &&
+                        pendingData.length === 0 && (
+                          <MDBox sx={centeredContentStyle}>
+                            <MDTypography variant="h6" color="textSecondary">
+                              No pending subscriptions found.
+                            </MDTypography>
+                          </MDBox>
+                        )
+                      )}
+                    </MDBox>
                   </>
                 )}
 
                 {activeTab === 2 && (
                   <>
-                    <LegacySubscriptionsTable
-                      initialLegacySubscriptions={legacyInitialData}
-                      onLoadMore={(pageToFetch) =>
-                        handleLoadMoreLegacy(pageToFetch, globalSearchTerm)
-                      }
-                      totalServerCount={legacyTotalCount}
-                      loadingInitial={legacyLoadingInitial}
-                      activeFilter={activeLegacyFilter}
-                      onFilterChange={(newFilter) =>
-                        handleLegacyFilterAction(newFilter, globalSearchTerm)
-                      }
-                      order={legacyOrder}
-                      orderBy={legacyOrderBy}
-                      onRequestSort={(event, property) =>
-                        handleLegacySortAction(event, property, globalSearchTerm)
-                      }
-                      rowsPerPageForLoadMore={ROWS_PER_PAGE_FOR_LOAD_MORE}
-                    />
+                    {/* Toolbar for Legacy Tab (Processed Filter Chips) */}
+                    <MDBox
+                      p={2}
+                      display="flex"
+                      justifyContent="flex-start"
+                      alignItems="center"
+                      flexWrap="wrap"
+                      gap={1.5}
+                      sx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}
+                    >
+                      <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mr: 1 }}>
+                        Status:
+                      </MDTypography>
+                      {LEGACY_PROCESSED_FILTER_OPTIONS.map((opt) => {
+                        let count = 0;
+                        if (opt.value === null) count = legacyTotalRecords; // 'All'
+                        else if (opt.value === true) count = processedLegacyCount; // 'Processed'
+                        else if (opt.value === false)
+                          count = legacyTotalRecords - processedLegacyCount; // 'Not Processed'
+                        const IconComponent = opt.icon; // Get the component itself from config
+
+                        return (
+                          <MuiChip
+                            key={String(opt.value)} // Use String for boolean key
+                            label={`${opt.label} (${count < 0 ? 0 : count})`} // Ensure count is not negative
+                            icon={IconComponent ? <IconComponent fontSize="small" /> : null}
+                            clickable
+                            color={legacyProcessedFilter === opt.value ? "primary" : "default"}
+                            onClick={() => handleLegacyProcessedFilterChange(opt.value)}
+                            variant={legacyProcessedFilter === opt.value ? "filled" : "outlined"}
+                            size="small"
+                          />
+                        );
+                      })}
+                    </MDBox>
+                    {legacyError && !legacyLoadingState && (
+                      <MDBox px={3} py={1}>
+                        <MuiAlert
+                          severity="error"
+                          onClose={() => setLegacyError(null)}
+                          sx={{ width: "100%" }}
+                        >
+                          {legacyError}
+                        </MuiAlert>
+                      </MDBox>
+                    )}
+                    <MDBox pt={1} sx={{ position: "relative" }}>
+                      {legacyLoadingState && legacyData.length === 0 && (
+                        <MDBox sx={centeredContentStyle}>
+                          <CircularProgress color="info" />
+                        </MDBox>
+                      )}
+                      {(!legacyLoadingState && legacyData.length > 0) ||
+                      (legacyLoadingState && legacyData.length > 0) ? (
+                        <DataTable
+                          table={{ columns: legacyDataTableColumns, rows: legacyData }}
+                          isSorted={false} // Legacy data might not support sorting via API easily
+                          entriesPerPage={{
+                            defaultValue: legacyQueryOptions.pageSize,
+                            options: [10, 20, 50, 100],
+                          }}
+                          showTotalEntries={legacyTotalRecords > 0}
+                          noEndBorder
+                          canSearch={false} // Global search handled by DashboardNavbar
+                          pagination={{ variant: "gradient", color: "info" }}
+                          manualPagination
+                          pageCount={legacyPageCount > 0 ? legacyPageCount : 1}
+                          page={legacyQueryOptions.page - 1} // DataTable is 0-indexed
+                          onPageChange={(newPage) => setLegacyQueryOptions({ page: newPage + 1 })}
+                          onEntriesPerPageChange={(newPageSize) =>
+                            setLegacyQueryOptions({ pageSize: newPageSize, page: 1 })
+                          }
+                          sx={legacyLoadingState && legacyData.length > 0 ? { opacity: 0.7 } : {}}
+                        />
+                      ) : (
+                        !legacyLoadingState &&
+                        legacyData.length === 0 && (
+                          <MDBox sx={centeredContentStyle}>
+                            <MDTypography variant="h6" color="textSecondary">
+                              No legacy subscriptions found.
+                            </MDTypography>
+                          </MDBox>
+                        )
+                      )}
+                    </MDBox>
                   </>
                 )}
               </Card>
@@ -514,13 +761,13 @@ function Tables() {
           open={formModalOpen}
           onClose={handleCloseModal}
           onSubmit={handleFormSubmit}
-          initialValues={selectedSubscription}
+          initialValues={editingSubscription}
           subscriptionTypes={subscriptionTypes}
-          availableSources={availableSources}
-          isEdit={!!selectedSubscription}
+          availableSources={(availableSources || []).map((s) => s.value)}
+          isEdit={!!editingSubscription}
         />
 
-        {bulkProcessResult && (
+        {bulkResultModalOpen && bulkProcessResult && (
           <Dialog
             open={bulkResultModalOpen}
             onClose={handleCloseBulkResultModal}
@@ -531,79 +778,61 @@ function Tables() {
               {bulkProcessResult.error ? "Bulk Processing Error" : "Bulk Processing Result"}
             </DialogTitle>
             <DialogContent dividers>
-              {bulkProcessResult && (
-                <>
-                  <Typography gutterBottom>
-                    {bulkProcessResult.message ||
-                      (bulkProcessResult.error
-                        ? "An error occurred during processing."
-                        : "Processing complete.")}
+              <Typography gutterBottom>
+                {bulkProcessResult.message ||
+                  (bulkProcessResult.error ? "An error occurred." : "Processing complete.")}
+              </Typography>
+              {bulkProcessResult.details && (
+                <MDBox mt={2}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Details:
                   </Typography>
-                  {bulkProcessResult.details && (
-                    <MDBox mt={2}>
-                      <Typography variant="subtitle1" gutterBottom>
-                        Details:
-                      </Typography>
-                      <MDTypography variant="body2">
-                        Total Candidates:{" "}
-                        {bulkProcessResult.details.total_candidates !== undefined
-                          ? bulkProcessResult.details.total_candidates
-                          : "N/A"}
-                      </MDTypography>
-                      <MDTypography variant="body2" color="success.main">
-                        Successfully Updated:{" "}
-                        {bulkProcessResult.details.successful_updates !== undefined
-                          ? bulkProcessResult.details.successful_updates
-                          : "N/A"}
-                      </MDTypography>
-                      <MDTypography variant="body2" color="error.main">
-                        Failures (Bot/DB):{" "}
-                        {bulkProcessResult.details.failed_bot_or_db_updates !== undefined
-                          ? bulkProcessResult.details.failed_bot_or_db_updates
-                          : "N/A"}
-                      </MDTypography>
-                      {bulkProcessResult.details.failures_log &&
-                        bulkProcessResult.details.failures_log.length > 0 && (
-                          <MDBox
-                            mt={2}
-                            sx={{
-                              maxHeight: 300,
-                              overflowY: "auto",
-                              border: "1px solid lightgray",
-                              p: 1,
-                              borderRadius: 1,
-                            }}
-                          >
-                            <Typography variant="subtitle2">Failure Log:</Typography>
-                            <List dense>
-                              {bulkProcessResult.details.failures_log.map((failure, index) => (
-                                <ListItem
-                                  key={index}
-                                  disableGutters
-                                  sx={{ borderBottom: "1px dashed #eee", pb: 0.5, mb: 0.5 }}
-                                >
-                                  <ListItemText
-                                    primaryTypographyProps={{ variant: "caption" }}
-                                    secondaryTypographyProps={{
-                                      variant: "caption",
-                                      color: "error",
-                                    }}
-                                    primary={`Sub ID: ${failure.sub_id} (User: ${failure.telegram_id})`}
-                                    secondary={`Error: ${failure.error}`}
-                                  />
-                                </ListItem>
-                              ))}
-                            </List>
-                          </MDBox>
-                        )}
-                    </MDBox>
-                  )}
-                  {bulkProcessResult.error && !bulkProcessResult.details && (
-                    <MDTypography variant="body2" color="error.main">
-                      {bulkProcessResult.error}
-                    </MDTypography>
-                  )}
-                </>
+                  <MDTypography variant="body2">
+                    Total Candidates: {bulkProcessResult.details.total_candidates ?? "N/A"}
+                  </MDTypography>
+                  <MDTypography variant="body2" color="success.main">
+                    Successfully Updated: {bulkProcessResult.details.successful_updates ?? "N/A"}
+                  </MDTypography>
+                  <MDTypography variant="body2" color="error.main">
+                    Failures (Bot/DB): {bulkProcessResult.details.failed_bot_or_db_updates ?? "N/A"}
+                  </MDTypography>
+                  {bulkProcessResult.details.failures_log &&
+                    bulkProcessResult.details.failures_log.length > 0 && (
+                      <MDBox
+                        mt={2}
+                        sx={{
+                          maxHeight: 300,
+                          overflowY: "auto",
+                          border: "1px solid lightgray",
+                          p: 1,
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="subtitle2">Failure Log:</Typography>
+                        <List dense>
+                          {bulkProcessResult.details.failures_log.map((failure, index) => (
+                            <ListItem
+                              key={index}
+                              disableGutters
+                              sx={{ borderBottom: "1px dashed #eee", pb: 0.5, mb: 0.5 }}
+                            >
+                              <ListItemText
+                                primaryTypographyProps={{ variant: "caption" }}
+                                secondaryTypographyProps={{ variant: "caption", color: "error" }}
+                                primary={`Sub ID: ${failure.sub_id} (User: ${failure.telegram_id})`}
+                                secondary={`Error: ${failure.error}`}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </MDBox>
+                    )}
+                </MDBox>
+              )}
+              {bulkProcessResult.error && !bulkProcessResult.details && (
+                <MDTypography variant="body2" color="error.main">
+                  {bulkProcessResult.error}
+                </MDTypography>
               )}
             </DialogContent>
             <DialogActions>
@@ -615,17 +844,17 @@ function Tables() {
         )}
 
         <Snackbar
-          open={snackbarOpen}
+          open={snackbar.open}
           autoHideDuration={6000}
           onClose={handleCloseSnackbar}
           anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         >
           <CustomAlert
             onClose={handleCloseSnackbar}
-            severity={snackbarSeverity}
+            severity={snackbar.severity}
             sx={{ width: "100%" }}
           >
-            {snackbarMessage}
+            {snackbar.message}
           </CustomAlert>
         </Snackbar>
         <Footer />

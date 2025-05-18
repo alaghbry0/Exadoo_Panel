@@ -1,156 +1,237 @@
 // src/layouts/Users/index.js
-import React, { useState, useEffect, useCallback, forwardRef, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, forwardRef, useMemo } from "react";
 import {
   Card,
   CircularProgress,
-  Snackbar as MuiSnackbar, // Renamed to avoid conflict if we use custom Snackbar later
+  Snackbar as MuiSnackbar,
   IconButton,
   Tooltip,
   Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button as MuiButton, // Using MuiButton for DialogActions for now
+  Chip as MuiChip,
+  Typography,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import AddIcon from "@mui/icons-material/Add";
 import MuiAlert from "@mui/material/Alert";
 
 // Material Dashboard Components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
-import MDButton from "components/MDButton"; // Use MDButton where appropriate
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
+import DataTable from "examples/Tables/DataTable";
 
 // Hooks
-import { useUsers } from "./hooks/useUsers"; // Already correct
+import { useUsers } from "./hooks/useUsers"; // تأكد أن هذا الهوك مُحدَّث
 
 // Components
-import UsersTableToolbar from "./components/UsersTableToolbar";
-import UsersTable from "./components/UsersTable";
 import UserDetailsDialog from "./components/UserDetailsDialog";
 import AddSubscriptionDialog from "./components/AddSubscriptionDialog";
-// API - if needed directly, else it's in the hook
-// import { getUsers, getUserDetails } from "../../../services/api"; // Likely handled by useUsers
+
+// Configs and Utils
+import { BASE_COLUMNS_CONFIG_USERS } from "./config/users.config";
+import { formatUserSubscriptionCount } from "./utils/users.utils";
+
+// API for dropdowns
+import { getSubscriptionTypes, getSubscriptionSources } from "../../services/api"; // تأكد من المسار الصحيح
 
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
 
-function Users() {
+const centeredContentStyle = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: "200px",
+  width: "100%",
+};
+
+function UsersPage() {
   const [globalSearchTerm, setGlobalSearchTerm] = useState("");
   const [userDetailsDialogOpen, setUserDetailsDialogOpen] = useState(false);
   const [addSubscriptionDialogOpen, setAddSubscriptionDialogOpen] = useState(false);
-  const [activeUserForDialog, setActiveUserForDialog] = useState(null); // For passing to dialogs
+  const [activeUserForDialog, setActiveUserForDialog] = useState(null);
 
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
-
-  const showSnackbar = useCallback((message, severity = "success") => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const showSnackbar = useCallback((message, severity = "info") => {
+    setSnackbar({ open: true, message, severity });
   }, []);
-
   const handleCloseSnackbar = (event, reason) => {
     if (reason === "clickaway") return;
-    setSnackbarOpen(false);
+    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
+  // استدعاء الهوك المحدث
   const {
-    users,
+    usersData,
     loading,
-    loadingMore,
-    error, // You might want to display this error more prominently
-    // rowsPerPage, // We'll pass this to UsersTable if needed by API
-    totalUsers,
-    order,
-    orderBy,
-    fetchInitialData,
-    handleRequestSort,
-    // handleChangeRowsPerPage, // Pass to UsersTable if API needs it and you add a selector
-    handleLoadMore,
-    hasMoreData,
-    selectedUser, // This is for user details dialog
+    error,
+    setError,
+    tableQueryOptions,
+    setTableQueryOptions, // هذه هي handleTableQueryOptionsChange من الهوك
+    totalRecords,
+    usersCountStat,
+    setSearchTerm, // هذه هي handleSetSearchTerm من الهوك
+    refetchData, // <<< الدالة الجديدة من الهوك للتحديث
+    selectedUserDetails,
     userDetailsLoading,
     userDetailsError,
-    fetchUserDetails,
-    clearSelectedUser,
-  } = useUsers(showSnackbar); // Pass our snackbar
-
-  // Initial data fetch and re-fetch on globalSearchTerm change
-  useEffect(() => {
-    fetchInitialData(globalSearchTerm);
-  }, [globalSearchTerm, fetchInitialData]);
-
-  const handleGlobalSearchChange = useCallback((value) => {
-    setGlobalSearchTerm(value);
-    // fetchInitialData will be called by the useEffect above
-  }, []);
-
-  const handleRefreshData = useCallback(async () => {
-    showSnackbar("Refreshing user data...", "info");
-    try {
-      await fetchInitialData(globalSearchTerm);
-      showSnackbar("User data refreshed!", "success");
-    } catch (e) {
-      showSnackbar("Failed to refresh user data.", "error");
-      console.error("Refresh error:", e);
-    }
-  }, [fetchInitialData, globalSearchTerm, showSnackbar]);
-
-  // User Details Dialog Handlers
-  const handleOpenUserDetails = useCallback(
-    (user) => {
-      fetchUserDetails(user.telegram_id); // Fetches details and sets selectedUser in the hook
-      setActiveUserForDialog(user); // Keep a reference if needed for other actions from the list
-      setUserDetailsDialogOpen(true);
-    },
-    [fetchUserDetails]
+    fetchUserDetailsForDialog,
+    clearSelectedUserDetails,
+  } = useUsers(
+    showSnackbar /*, globalSearchTerm - لم نعد بحاجة لتمريره هنا إذا كان الهوك لا يستخدمه للإعداد الأولي */
   );
 
-  const handleCloseUserDetailsDialog = () => {
-    setUserDetailsDialogOpen(false);
-    clearSelectedUser(); // Clears selectedUser in the hook
-    setActiveUserForDialog(null);
-  };
+  // For AddSubscriptionDialog dropdowns
+  const [subscriptionTypes, setSubscriptionTypes] = useState([]);
+  const [availableSources, setAvailableSources] = useState([]);
 
-  // Add Subscription Dialog Handlers
+  useEffect(() => {
+    const fetchDropdownData = async () => {
+      try {
+        const [typesData, sourcesData] = await Promise.all([
+          getSubscriptionTypes(),
+          getSubscriptionSources(),
+        ]);
+        setSubscriptionTypes(typesData || []);
+        const formattedSources = (sourcesData || []).map((s) => ({
+          value: typeof s === "string" ? s : s.name,
+          label: typeof s === "string" ? s : s.name,
+        }));
+        setAvailableSources(formattedSources);
+      } catch (err) {
+        console.error("Failed to load data for Add Subscription dialog:", err);
+        showSnackbar("Failed to load data for Add Subscription dialog", "error");
+      }
+    };
+    fetchDropdownData();
+  }, [showSnackbar]);
+
+  // Effect لمزامنة globalSearchTerm (من شريط البحث في Navbar) مع الهوك
+  useEffect(() => {
+    // استدعاء setSearchTerm من الهوك (التي هي handleSetSearchTerm داخليًا)
+    // هذا سيؤدي إلى تحديث internalSearchTerm في الهوك وإعادة الصفحة إلى 1.
+    setSearchTerm(globalSearchTerm);
+  }, [globalSearchTerm, setSearchTerm]); // الاعتماديات صحيحة
+
+  // يتم استدعاؤها من DashboardNavbar
+  const handleGlobalSearchChange = useCallback((value) => {
+    setGlobalSearchTerm(value); // هذا سيشغل الـ useEffect أعلاه
+  }, []);
+
+  // يتم استدعاؤها عند الضغط على زر التحديث
+  const handleRefreshData = useCallback(() => {
+    // showSnackbar("Refreshing user data...", "info"); // يمكن وضعها هنا أو داخل refetchData في الهوك
+    if (refetchData) {
+      // تأكد من وجود الدالة قبل استدعائها
+      refetchData();
+    }
+  }, [refetchData]); // الاعتماد على refetchData من الهوك
+
+  const handleOpenUserDetails = useCallback(
+    (user) => {
+      setActiveUserForDialog(user);
+      fetchUserDetailsForDialog(user.telegram_id);
+      setUserDetailsDialogOpen(true);
+    },
+    [fetchUserDetailsForDialog]
+  );
+
+  const handleCloseUserDetailsDialog = useCallback(() => {
+    setUserDetailsDialogOpen(false);
+    clearSelectedUserDetails();
+    setActiveUserForDialog(null);
+  }, [clearSelectedUserDetails]);
+
   const handleOpenAddSubscriptionDialog = useCallback((user) => {
-    // If called from UserDetailsDialog, 'user' will be selectedUser.
-    // If called directly from table row, 'user' is the row user.
     setActiveUserForDialog(user);
     setAddSubscriptionDialogOpen(true);
   }, []);
 
-  const handleCloseAddSubscriptionDialog = () => {
+  const handleCloseAddSubscriptionDialog = useCallback(() => {
     setAddSubscriptionDialogOpen(false);
-    // setActiveUserForDialog(null); // Keep activeUserForDialog if UserDetailsDialog is still open
-  };
+  }, []);
 
-  const handleSubscriptionAdded = async () => {
-    showSnackbar("Subscription added/updated. Refreshing data...", "success");
-    // Refresh user list
-    await fetchInitialData(globalSearchTerm);
-    // If user details dialog is open and pertains to the user for whom sub was added, refresh its data
-    if (
-      userDetailsDialogOpen &&
-      selectedUser &&
-      activeUserForDialog &&
-      selectedUser.telegram_id === activeUserForDialog.telegram_id
-    ) {
-      await fetchUserDetails(selectedUser.telegram_id);
+  const handleSubscriptionAdded = useCallback(async () => {
+    showSnackbar("Subscription action complete. Refreshing user data...", "success");
+    if (refetchData) {
+      // استخدام دالة التحديث المباشرة من الهوك
+      refetchData();
+    }
+
+    if (userDetailsDialogOpen && activeUserForDialog?.telegram_id) {
+      await fetchUserDetailsForDialog(activeUserForDialog.telegram_id);
     }
     setAddSubscriptionDialogOpen(false);
-  };
+  }, [
+    refetchData,
+    userDetailsDialogOpen,
+    activeUserForDialog,
+    fetchUserDetailsForDialog,
+    showSnackbar,
+  ]);
 
-  const isAnyLoading = useMemo(
-    () => loading || loadingMore || userDetailsLoading,
-    [loading, loadingMore, userDetailsLoading]
-  );
+  const usersDataTableColumns = useMemo(() => {
+    const actionColumn = {
+      Header: "ACTIONS",
+      accessor: "actions",
+      align: "center",
+      disableSortBy: true,
+      width: "10%",
+      Cell: ({ row }) => (
+        <MDBox display="flex" justifyContent="center" alignItems="center" gap={0.5}>
+          <Tooltip title="View Details">
+            <IconButton
+              size="small"
+              onClick={() => handleOpenUserDetails(row.original)}
+              color="info"
+            >
+              <VisibilityIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Add Subscription">
+            <IconButton
+              size="small"
+              onClick={() => handleOpenAddSubscriptionDialog(row.original)}
+              color="success"
+            >
+              <AddIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        </MDBox>
+      ),
+    };
+
+    const formattedBase = BASE_COLUMNS_CONFIG_USERS.map((col) => {
+      if (col.accessor === "active_subscription_count") {
+        return { ...col, Cell: ({ value }) => formatUserSubscriptionCount(value) };
+      }
+      if (col.accessor === "subscription_count") {
+        return {
+          ...col,
+          Cell: ({ value }) => (
+            <Typography variant="caption" color="text.secondary">
+              {String(value ?? 0)}
+            </Typography>
+          ),
+        };
+      }
+      return {
+        ...col,
+        Cell: ({ value }) => (
+          <MDTypography variant="caption" color="text" fontWeight="medium">
+            {value !== null && typeof value !== "undefined" ? String(value) : "N/A"}
+          </MDTypography>
+        ),
+      };
+    });
+    return [...formattedBase, actionColumn];
+  }, [handleOpenUserDetails, handleOpenAddSubscriptionDialog]);
+
+  const usersPageCount = Math.ceil(totalRecords / (tableQueryOptions.pageSize || 20));
 
   return (
     <DashboardLayout>
@@ -175,57 +256,104 @@ function Users() {
                 <MDTypography variant="h6" color="white">
                   Users Management
                 </MDTypography>
-                {/* You can add a count here if desired, similar to Tables page, e.g., totalUsers */}
+                <MDBox display="flex" alignItems="center" gap={1}>
+                  {usersCountStat !== null && typeof usersCountStat !== "undefined" && (
+                    <MuiChip
+                      label={`Total Users: ${usersCountStat}`}
+                      size="small"
+                      sx={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white" }}
+                    />
+                  )}
+                  <Tooltip title="Refresh Data">
+                    <IconButton
+                      onClick={handleRefreshData}
+                      sx={{ color: "white" }}
+                      disabled={loading}
+                    >
+                      {loading && usersData.length > 0 ? (
+                        <CircularProgress size={24} color="inherit" />
+                      ) : (
+                        <RefreshIcon />
+                      )}
+                    </IconButton>
+                  </Tooltip>
+                </MDBox>
               </MDBox>
 
-              <UsersTableToolbar
-                onRefreshClick={handleRefreshData}
-                // onAddNewUserClick={() => { /* TODO: Implement Add User Modal if needed */ }}
-                // For future filters:
-                // onFilterChange={(newFilters) => handleUserFilterChange(newFilters, globalSearchTerm)}
-                // filters={userFilters}
-                loading={loading}
-              />
-
               {error && !loading && (
-                <MDBox px={3} py={1}>
-                  <MuiAlert severity="error" sx={{ width: "100%" }}>
-                    {typeof error === "object" ? JSON.stringify(error) : error}
+                <MDBox px={2} py={1}>
+                  <MuiAlert
+                    severity="error"
+                    onClose={() => setError && setError(null)}
+                    sx={{ width: "100%", mb: 1 }}
+                  >
+                    {typeof error === "string" ? error : JSON.stringify(error)}
                   </MuiAlert>
                 </MDBox>
               )}
 
-              <UsersTable
-                users={users}
-                loading={loading} // For initial skeleton
-                loadingMore={loadingMore} // For "Load More" button spinner
-                order={order}
-                orderBy={orderBy}
-                onRequestSort={(event, property) =>
-                  handleRequestSort(event, property, globalSearchTerm)
-                }
-                onLoadMore={() => handleLoadMore(globalSearchTerm)}
-                hasMore={hasMoreData}
-                totalCount={totalUsers}
-                onViewDetailsClick={handleOpenUserDetails}
-                onAddSubscriptionClick={handleOpenAddSubscriptionDialog}
-                // Pass rowsPerPage and onRowsPerPageChange if you implement a selector for it
-                // rowsPerPage={rowsPerPage}
-                // onRowsPerPageChange={(e) => handleChangeRowsPerPage(e, globalSearchTerm)}
-              />
+              <MDBox pt={1} sx={{ position: "relative" }}>
+                {loading && usersData.length === 0 && (
+                  <MDBox sx={centeredContentStyle}>
+                    <CircularProgress color="info" />
+                  </MDBox>
+                )}
+
+                {!loading && usersData.length === 0 && !error ? (
+                  <MDBox sx={centeredContentStyle}>
+                    <MDTypography variant="h6" color="textSecondary">
+                      No users found.
+                    </MDTypography>
+                  </MDBox>
+                ) : usersData.length > 0 || (loading && usersData.length > 0) ? (
+                  <DataTable
+                    table={{ columns: usersDataTableColumns, rows: usersData }}
+                    isSorted={false}
+                    entriesPerPage={{
+                      defaultValue: tableQueryOptions.pageSize,
+                      options: [10, 20, 50, 100],
+                    }}
+                    showTotalEntries={totalRecords > 0}
+                    noEndBorder
+                    canSearch={false}
+                    pagination={{ variant: "gradient", color: "info" }}
+                    manualPagination
+                    pageCount={usersPageCount > 0 ? usersPageCount : 1}
+                    // --- تعديلات هنا ---
+                    page={tableQueryOptions.page - 1} // تمرير الصفحة 0-indexed
+                    onPageChange={(newPageIndex) => {
+                      // استقبال الصفحة 0-indexed
+                      if (setTableQueryOptions) {
+                        // تحديث حالة الهوك بالصفحة 1-indexed
+                        setTableQueryOptions({ page: newPageIndex + 1 });
+                      }
+                    }}
+                    onEntriesPerPageChange={(newPageSize) => {
+                      // استقبال حجم الصفحة الجديد
+                      if (setTableQueryOptions) {
+                        setTableQueryOptions({ pageSize: newPageSize, page: 1 }); // إعادة التعيين للصفحة 1
+                      }
+                    }}
+                    // --- نهاية التعديلات ---
+                    sx={
+                      loading && usersData.length > 0 ? { opacity: 0.7, pointerEvents: "none" } : {}
+                    }
+                  />
+                ) : null}
+              </MDBox>
             </Card>
           </Grid>
         </Grid>
       </MDBox>
 
-      {userDetailsDialogOpen && selectedUser && (
+      {userDetailsDialogOpen && selectedUserDetails && (
         <UserDetailsDialog
           open={userDetailsDialogOpen}
           onClose={handleCloseUserDetailsDialog}
-          user={selectedUser} // selectedUser is fetched by fetchUserDetails
+          user={selectedUserDetails}
           loading={userDetailsLoading}
           error={userDetailsError}
-          onAddSubscription={() => handleOpenAddSubscriptionDialog(selectedUser)} // Pass the detailed user
+          onAddSubscriptionClick={() => handleOpenAddSubscriptionDialog(selectedUserDetails)}
         />
       )}
 
@@ -233,26 +361,29 @@ function Users() {
         <AddSubscriptionDialog
           open={addSubscriptionDialogOpen}
           onClose={handleCloseAddSubscriptionDialog}
-          user={activeUserForDialog} // Use activeUserForDialog which is set before opening
+          userTelegramId={activeUserForDialog.telegram_id}
+          currentFullName={
+            activeUserForDialog.full_name ||
+            `${activeUserForDialog.first_name || ""} ${activeUserForDialog.last_name || ""}`.trim()
+          }
           onSuccess={handleSubscriptionAdded}
-          // You'll need to fetch subscriptionTypes and sources similar to Tables page
-          // subscriptionTypes={subscriptionTypes}
-          // availableSources={availableSources}
+          subscriptionTypes={subscriptionTypes}
+          availableSources={(availableSources || []).map((s) => s.value)}
         />
       )}
 
       <MuiSnackbar
-        open={snackbarOpen}
+        open={snackbar.open}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <CustomAlert
           onClose={handleCloseSnackbar}
-          severity={snackbarSeverity}
+          severity={snackbar.severity}
           sx={{ width: "100%" }}
         >
-          {snackbarMessage}
+          {snackbar.message}
         </CustomAlert>
       </MuiSnackbar>
       <Footer />
@@ -260,4 +391,4 @@ function Users() {
   );
 }
 
-export default Users;
+export default UsersPage;
