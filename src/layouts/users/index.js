@@ -37,7 +37,11 @@ import { BASE_COLUMNS_CONFIG_USERS } from "./config/users.config";
 import { formatUserSubscriptionCount } from "./utils/users.utils";
 
 // API for dropdowns and export
-import { getSubscriptionTypes, getSubscriptionSources, exportUsers } from "../../services/api"; // <<<--- تم إضافة exportUsers
+import {
+  getSubscriptionTypes,
+  getSubscriptionSources,
+  exportUsersToExcel as exportUsers,
+} from "../../services/api";
 
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
