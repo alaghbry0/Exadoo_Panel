@@ -147,7 +147,6 @@ const SubscriptionFormModal = ({
                 value={formData.username}
                 onChange={handleChange}
                 required
-                disabled={isEdit}
               />
             </Grid>
             <Grid item xs={12}>

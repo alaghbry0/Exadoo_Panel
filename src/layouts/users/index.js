@@ -14,6 +14,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import AddIcon from "@mui/icons-material/Add";
 import MuiAlert from "@mui/material/Alert";
+import FileDownloadIcon from "@mui/icons-material/FileDownload"; // <<<--- تمت الإضافة
 
 // Material Dashboard Components
 import MDBox from "components/MDBox";
@@ -24,18 +25,19 @@ import Footer from "examples/Footer";
 import DataTable from "examples/Tables/DataTable";
 
 // Hooks
-import { useUsers } from "./hooks/useUsers"; // تأكد أن هذا الهوك مُحدَّث
+import { useUsers } from "./hooks/useUsers";
 
 // Components
 import UserDetailsDialog from "./components/UserDetailsDialog";
 import AddSubscriptionDialog from "./components/AddSubscriptionDialog";
+import ExportUsersDialog from "./components/ExportUsersDialog"; // <<<--- تمت الإضافة (افترض أن الاسم هو ExportUsersDialog)
 
 // Configs and Utils
 import { BASE_COLUMNS_CONFIG_USERS } from "./config/users.config";
 import { formatUserSubscriptionCount } from "./utils/users.utils";
 
-// API for dropdowns
-import { getSubscriptionTypes, getSubscriptionSources } from "../../services/api"; // تأكد من المسار الصحيح
+// API for dropdowns and export
+import { getSubscriptionTypes, getSubscriptionSources, exportUsers } from "../../services/api"; // <<<--- تم إضافة exportUsers
 
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
@@ -54,6 +56,7 @@ function UsersPage() {
   const [userDetailsDialogOpen, setUserDetailsDialogOpen] = useState(false);
   const [addSubscriptionDialogOpen, setAddSubscriptionDialogOpen] = useState(false);
   const [activeUserForDialog, setActiveUserForDialog] = useState(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false); // <<<--- تمت الإضافة
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const showSnackbar = useCallback((message, severity = "info") => {
@@ -64,28 +67,24 @@ function UsersPage() {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
-  // استدعاء الهوك المحدث
   const {
     usersData,
     loading,
     error,
     setError,
     tableQueryOptions,
-    setTableQueryOptions, // هذه هي handleTableQueryOptionsChange من الهوك
+    setTableQueryOptions,
     totalRecords,
     usersCountStat,
-    setSearchTerm, // هذه هي handleSetSearchTerm من الهوك
-    refetchData, // <<< الدالة الجديدة من الهوك للتحديث
+    setSearchTerm,
+    refetchData,
     selectedUserDetails,
     userDetailsLoading,
     userDetailsError,
     fetchUserDetailsForDialog,
     clearSelectedUserDetails,
-  } = useUsers(
-    showSnackbar /*, globalSearchTerm - لم نعد بحاجة لتمريره هنا إذا كان الهوك لا يستخدمه للإعداد الأولي */
-  );
+  } = useUsers(showSnackbar);
 
-  // For AddSubscriptionDialog dropdowns
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
   const [availableSources, setAvailableSources] = useState([]);
 
@@ -110,26 +109,19 @@ function UsersPage() {
     fetchDropdownData();
   }, [showSnackbar]);
 
-  // Effect لمزامنة globalSearchTerm (من شريط البحث في Navbar) مع الهوك
   useEffect(() => {
-    // استدعاء setSearchTerm من الهوك (التي هي handleSetSearchTerm داخليًا)
-    // هذا سيؤدي إلى تحديث internalSearchTerm في الهوك وإعادة الصفحة إلى 1.
     setSearchTerm(globalSearchTerm);
-  }, [globalSearchTerm, setSearchTerm]); // الاعتماديات صحيحة
+  }, [globalSearchTerm, setSearchTerm]);
 
-  // يتم استدعاؤها من DashboardNavbar
   const handleGlobalSearchChange = useCallback((value) => {
-    setGlobalSearchTerm(value); // هذا سيشغل الـ useEffect أعلاه
+    setGlobalSearchTerm(value);
   }, []);
 
-  // يتم استدعاؤها عند الضغط على زر التحديث
   const handleRefreshData = useCallback(() => {
-    // showSnackbar("Refreshing user data...", "info"); // يمكن وضعها هنا أو داخل refetchData في الهوك
     if (refetchData) {
-      // تأكد من وجود الدالة قبل استدعائها
       refetchData();
     }
-  }, [refetchData]); // الاعتماد على refetchData من الهوك
+  }, [refetchData]);
 
   const handleOpenUserDetails = useCallback(
     (user) => {
@@ -158,10 +150,8 @@ function UsersPage() {
   const handleSubscriptionAdded = useCallback(async () => {
     showSnackbar("Subscription action complete. Refreshing user data...", "success");
     if (refetchData) {
-      // استخدام دالة التحديث المباشرة من الهوك
       refetchData();
     }
-
     if (userDetailsDialogOpen && activeUserForDialog?.telegram_id) {
       await fetchUserDetailsForDialog(activeUserForDialog.telegram_id);
     }
@@ -173,6 +163,49 @@ function UsersPage() {
     fetchUserDetailsForDialog,
     showSnackbar,
   ]);
+
+  // <<<--- تمت إضافة الدوال المعالجة لـ Export Dialog ---<<<
+  const handleOpenExportDialog = useCallback(() => {
+    setExportDialogOpen(true);
+  }, []);
+
+  const handleCloseExportDialog = useCallback(() => {
+    setExportDialogOpen(false);
+  }, []);
+
+  const handleExportSubmit = useCallback(
+    async (exportOptions) => {
+      // اسم الدالة onSubmit في ExportUsersDialog.js يتوافق مع هذه.
+      try {
+        showSnackbar("Generating Excel file...", "info");
+        const blob = await exportUsers(exportOptions); // استدعاء API التصدير
+
+        const url = window.URL.createObjectURL(new Blob([blob]));
+        const link = document.createElement("a");
+        link.href = url;
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, "");
+        link.setAttribute("download", `users_export_${timestamp}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        showSnackbar("Excel file downloaded successfully!", "success");
+        handleCloseExportDialog();
+      } catch (err) {
+        console.error("Export failed:", err);
+        const message =
+          err.response?.data?.details ||
+          err.response?.data?.error ||
+          err.message ||
+          "Failed to export data.";
+        showSnackbar(`Export Error: ${message}`, "error");
+        // قد لا ترغب في إغلاق الحوار عند الفشل
+      }
+    },
+    [showSnackbar, handleCloseExportDialog] // أضفت handleCloseExportDialog للاعتماديات
+  );
+  // >>>------------------------------------------------>>>
 
   const usersDataTableColumns = useMemo(() => {
     const actionColumn = {
@@ -256,6 +289,7 @@ function UsersPage() {
                 <MDTypography variant="h6" color="white">
                   Users Management
                 </MDTypography>
+                {/* <<<--- تم تعديل هذا الجزء لإضافة زر التصدير ---<<< */}
                 <MDBox display="flex" alignItems="center" gap={1}>
                   {usersCountStat !== null && typeof usersCountStat !== "undefined" && (
                     <MuiChip
@@ -264,12 +298,23 @@ function UsersPage() {
                       sx={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white" }}
                     />
                   )}
+                  <Tooltip title="تصدير البيانات">
+                    <IconButton
+                      onClick={handleOpenExportDialog}
+                      sx={{ color: "white" }}
+                      disabled={loading || usersData.length === 0} // تعطيل إذا كان التحميل جاريًا أو لا توجد بيانات
+                    >
+                      <FileDownloadIcon />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Refresh Data">
                     <IconButton
                       onClick={handleRefreshData}
                       sx={{ color: "white" }}
-                      disabled={loading}
+                      disabled={loading} // تعطيل إذا كان التحميل جاريًا
                     >
+                      {/* تعديل طفيف: إظهار الدائرة فقط إذا كان التحميل جاريًا وهناك بيانات بالفعل (تجنب وميض الأيقونة عند التحميل الأولي)
+                          أو ببساطة: loading ? <CircularProgress... : <RefreshIcon /> */}
                       {loading && usersData.length > 0 ? (
                         <CircularProgress size={24} color="inherit" />
                       ) : (
@@ -278,6 +323,7 @@ function UsersPage() {
                     </IconButton>
                   </Tooltip>
                 </MDBox>
+                {/* >>>------------------------------------------------>>> */}
               </MDBox>
 
               {error && !loading && (
@@ -315,26 +361,21 @@ function UsersPage() {
                     }}
                     showTotalEntries={totalRecords > 0}
                     noEndBorder
-                    canSearch={false}
+                    canSearch={false} // البحث يتم عبر شريط البحث العام
                     pagination={{ variant: "gradient", color: "info" }}
                     manualPagination
                     pageCount={usersPageCount > 0 ? usersPageCount : 1}
-                    // --- تعديلات هنا ---
-                    page={tableQueryOptions.page - 1} // تمرير الصفحة 0-indexed
+                    page={tableQueryOptions.page - 1}
                     onPageChange={(newPageIndex) => {
-                      // استقبال الصفحة 0-indexed
                       if (setTableQueryOptions) {
-                        // تحديث حالة الهوك بالصفحة 1-indexed
                         setTableQueryOptions({ page: newPageIndex + 1 });
                       }
                     }}
                     onEntriesPerPageChange={(newPageSize) => {
-                      // استقبال حجم الصفحة الجديد
                       if (setTableQueryOptions) {
-                        setTableQueryOptions({ pageSize: newPageSize, page: 1 }); // إعادة التعيين للصفحة 1
+                        setTableQueryOptions({ pageSize: newPageSize, page: 1 });
                       }
                     }}
-                    // --- نهاية التعديلات ---
                     sx={
                       loading && usersData.length > 0 ? { opacity: 0.7, pointerEvents: "none" } : {}
                     }
@@ -353,24 +394,30 @@ function UsersPage() {
           user={selectedUserDetails}
           loading={userDetailsLoading}
           error={userDetailsError}
-          onAddSubscriptionClick={() => handleOpenAddSubscriptionDialog(selectedUserDetails)}
+          onAddSubscription={() => handleOpenAddSubscriptionDialog(selectedUserDetails)} // <-- تم تغيير اسم الخاصية إلى onAddSubscription
         />
       )}
-
       {addSubscriptionDialogOpen && activeUserForDialog && (
         <AddSubscriptionDialog
           open={addSubscriptionDialogOpen}
           onClose={handleCloseAddSubscriptionDialog}
-          userTelegramId={activeUserForDialog.telegram_id}
-          currentFullName={
-            activeUserForDialog.full_name ||
-            `${activeUserForDialog.first_name || ""} ${activeUserForDialog.last_name || ""}`.trim()
-          }
+          user={activeUserForDialog} // <--- قم بتمرير الكائن بأكمله هنا
           onSuccess={handleSubscriptionAdded}
-          subscriptionTypes={subscriptionTypes}
-          availableSources={(availableSources || []).map((s) => s.value)}
+          subscriptionTypes={subscriptionTypes} // هذه الخصائص الأخرى تبدو صحيحة
+          availableSources={(availableSources || []).map((s) => s.value)} // هذه الخصائص الأخرى تبدو صحيحة
         />
       )}
+
+      {/* <<<--- تم إضافة المربع الحواري للتصدير هنا ---<<< */}
+      {exportDialogOpen && (
+        <ExportUsersDialog
+          open={exportDialogOpen}
+          onClose={handleCloseExportDialog}
+          onSubmit={handleExportSubmit} // تمرير دالة الإرسال
+          currentSearchTerm={globalSearchTerm} // تمرير مصطلح البحث الحالي
+        />
+      )}
+      {/* >>>-------------------------------------------->>> */}
 
       <MuiSnackbar
         open={snackbar.open}

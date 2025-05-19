@@ -3,7 +3,7 @@ import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
 
-const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
+const API_BASE_URL = "http://localhost:5000";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
@@ -649,6 +649,45 @@ export const getPublicTermsConditions = async () => {
     const response = await axios.get(`${API_BASE_URL}/api/public/terms-conditions`);
     return response.data;
   } catch (error) {
+    throw error;
+  }
+};
+
+export const exportUsersToExcel = async (exportOptions) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/admin/users/export`, exportOptions, {
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      responseType: "blob", // Important for file download
+    });
+
+    // Create a download link and trigger the download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+
+    // Generate filename with current date and time
+    const date = new Date();
+    const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(
+      date.getDate()
+    ).padStart(2, "0")}_${String(date.getHours()).padStart(2, "0")}${String(
+      date.getMinutes()
+    ).padStart(2, "0")}`;
+    const filename = `users_export_${timestamp}.xlsx`;
+
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+
+    // Clean up
+    link.parentNode.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    return true;
+  } catch (error) {
+    console.error("Export error:", error);
     throw error;
   }
 };

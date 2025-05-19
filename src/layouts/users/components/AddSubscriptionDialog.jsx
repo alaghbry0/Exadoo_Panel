@@ -187,7 +187,6 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
                 name="full_name"
                 fullWidth
                 value={formData.full_name}
-                disabled // Always disabled
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
@@ -197,7 +196,6 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
                 name="username"
                 fullWidth
                 value={formData.username}
-                disabled // Always disabled
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
