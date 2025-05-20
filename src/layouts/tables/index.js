@@ -33,7 +33,7 @@ import {
   addOrRenewSubscriptionAdmin, // اسم محدث
   updateSubscriptionAdmin, // اسم محدث (يفترض وجود نقطة PUT)
   // cancelSubscriptionAdmin سيتم استيرادها واستخدامها داخل SubscriptionsTabContent
-} from "./services/api";
+} from "services/api";
 
 function Tables() {
   const [activeTab, setActiveTab] = useState(0);

@@ -3,13 +3,12 @@
 export {
   getSubscriptions,
   getSubscriptionTypes,
-  addSubscription,
-  updateSubscription,
+  addOrRenewSubscriptionAdmin,
+  updateSubscriptionAdmin,
   getSubscriptionSources,
   getPendingSubscriptions,
-  // handlePendingSubscriptionAction, // <<< تأكد من إزالة القديم أو تعديله
-  handleSinglePendingSubscriptionAction, // <<< تأكد من إعادة تصدير هذا
-  handleBulkPendingSubscriptionsAction, // <<< تأكد من إعادة تصدير هذا
+  handleSinglePendingSubscriptionAction,
+  handleBulkPendingSubscriptionsAction,
   getLegacySubscriptions,
   getPendingSubscriptionsStats,
-} from "../../../services/api";
+} from "services/api";

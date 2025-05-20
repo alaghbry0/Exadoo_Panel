@@ -32,7 +32,11 @@ import MDButton from "components/MDButton";
 // DataTable قد لا نحتاجه إذا استخدمنا MUI Table مباشرة أو قمنا بتبسيط العرض
 // import DataTable from "examples/Tables/DataTable";
 
-import { getSubscriptions, updateSubscription, addSubscription } from "services/api";
+import {
+  getSubscriptions,
+  updateSubscriptionAdmin,
+  addOrRenewSubscriptionAdmin,
+} from "services/api";
 import { format } from "date-fns";
 import SubscriptionFormModal from "./SubscriptionFormModal";
 import ExportModal from "./ExportModal"; // إذا كنت ستستخدمه هنا
@@ -200,9 +204,9 @@ function ActiveSubscriptionsTab({ subscriptionTypes, isLoadingTypes, initialSear
         if (!subId) {
           throw new Error("Subscription ID not found for editing.");
         }
-        await updateSubscription(subId, formData);
+        await updateSubscriptionAdmin(subId, formData);
       } else {
-        await addSubscription(formData);
+        await addOrRenewSubscriptionAdmin(formData);
       }
       setModalOpen(false);
       loadSubscriptions(); // أعد تحميل البيانات
