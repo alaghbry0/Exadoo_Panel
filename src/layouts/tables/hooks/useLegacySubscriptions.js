@@ -8,21 +8,16 @@ export function useLegacySubscriptions(showSnackbar, initialSearchTerm = "") {
   const [error, setError] = useState(null);
 
   const [tableQueryOptions, setTableQueryOptions] = useState({
-    page: 1, // 1-indexed for API
-    pageSize: 20, // Default page size
+    // مُحدِّث الحالة المباشر
+    page: 1,
+    pageSize: 20,
   });
 
-  // Filter for 'processed' status: null (all), true (processed), false (not processed)
   const [processedFilter, setProcessedFilter] = useState(null);
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
 
   const [totalRecords, setTotalRecords] = useState(0);
-  const [processedLegacyCount, setProcessedLegacyCount] = useState(0); // Stat from API
-
-  // Client-side sorting state (if you want DataTable to handle it)
-  // Or remove if server handles sorting and DataTable's isSorted is false
-  // const [order, setOrder] = useState("desc");
-  // const [orderBy, setOrderBy] = useState("expiry_date");
+  const [processedLegacyCount, setProcessedLegacyCount] = useState(0);
 
   const fetchData = useCallback(
     async (queryOpts, currentProcessedFilter, currentSearch) => {
@@ -33,9 +28,7 @@ export function useLegacySubscriptions(showSnackbar, initialSearchTerm = "") {
           page: queryOpts.page,
           page_size: queryOpts.pageSize,
           search: currentSearch || undefined,
-          processed: currentProcessedFilter === null ? undefined : String(currentProcessedFilter), // API expects "true", "false", or undefined/all
-          // sort_field: orderBy, // If server-side sorting is kept
-          // sort_order: order,    // If server-side sorting is kept
+          processed: currentProcessedFilter === null ? undefined : String(currentProcessedFilter),
         };
 
         Object.keys(paramsToSend).forEach((key) => {
@@ -78,32 +71,22 @@ export function useLegacySubscriptions(showSnackbar, initialSearchTerm = "") {
         setLoading(false);
       }
     },
-    [showSnackbar /*, order, orderBy (if server-side sort)*/]
+    [showSnackbar]
   );
 
-  // Effect to fetch data when relevant states change
   useEffect(() => {
     fetchData(tableQueryOptions, processedFilter, searchTerm);
   }, [fetchData, tableQueryOptions, processedFilter, searchTerm]);
 
   const handleProcessedFilterChange = useCallback((newFilterValue) => {
     setProcessedFilter(newFilterValue);
-    setTableQueryOptions((prev) => ({ ...prev, page: 1 })); // Reset page
+    setTableQueryOptions((prev) => ({ ...prev, page: 1 }));
   }, []);
 
-  const handleTableQueryOptionsChange = useCallback((newOptions) => {
-    setTableQueryOptions((prev) => ({ ...prev, ...newOptions }));
-  }, []);
-
-  // Client-side sort handler (if DataTable's isSorted is true)
-  // Or modify to send sort params to server if isSorted is false and server handles it
-  // const handleSortRequest = useCallback((event, property) => {
-  //   const isAsc = orderBy === property && order === "asc";
-  //   setOrder(isAsc ? "desc" : "asc");
-  //   setOrderBy(property);
-  //   // If server-side sorting:
-  //   // setTableQueryOptions(prev => ({ ...prev, page: 1 })); // And fetchData will use new order/orderBy
-  // }, [order, orderBy]);
+  // الدالة handleTableQueryOptionsChange لم تعد ضرورية هنا
+  // const handleTableQueryOptionsChange = useCallback((newOptions) => {
+  //   setTableQueryOptions((prev) => ({ ...prev, ...newOptions }));
+  // }, []);
 
   return {
     legacyData,
@@ -111,16 +94,12 @@ export function useLegacySubscriptions(showSnackbar, initialSearchTerm = "") {
     error,
     setError,
     tableQueryOptions,
-    setTableQueryOptions: handleTableQueryOptionsChange,
+    setTableQueryOptions, // <-- التغيير: أرجع مُحدِّث الحالة المباشر
     totalRecords,
-    processedLegacyCount, // Stat for display
-    processedFilter, // Current 'processed' filter
+    processedLegacyCount,
+    processedFilter,
     handleProcessedFilterChange,
-    setSearchTerm, // To update search from parent
-    // order, // Expose if using client-side sort controlled by DataTable
-    // orderBy,
-    // handleSortRequest, // Expose if using client-side sort controlled by DataTable
-    // Expose a direct fetch for refresh button if needed, though useEffect handles most cases
-    fetchData,
+    setSearchTerm,
+    fetchData, // قد تحتاجها للإنعاش اليدوي من المكون الأب
   };
 }

@@ -3,7 +3,7 @@ import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
@@ -190,12 +190,21 @@ export const getIncomingTransactions = async (filters = {}) => {
   }
 };
 
-/**
- * 3. تعديل اشتراك مستخدم
- * ترسل البيانات المراد تحديثها في جسم الطلب (body) على سبيل المثال:
- * { expiry_date: "2025-02-28T00:00:00Z", is_active: false, subscription_plan_id: 2, source: "manual" }
- */
-export const updateSubscription = async (subscriptionId, data) => {
+export const addOrRenewSubscriptionAdmin = async (data) => {
+  // اسم جديد للدلالة على الإضافة أو التجديد
+  try {
+    // هذه النقطة تستخدم الآن days_to_add
+    const response = await axios.post(`${API_BASE_URL}/api/admin/subscriptions`, data, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error in addOrRenewSubscriptionAdmin:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const updateSubscriptionAdmin = async (subscriptionId, data) => {
   try {
     const response = await axios.put(
       `${API_BASE_URL}/api/admin/subscriptions/${subscriptionId}`,
@@ -206,30 +215,23 @@ export const updateSubscription = async (subscriptionId, data) => {
     );
     return response.data;
   } catch (error) {
+    console.error("Error in updateSubscriptionAdmin:", error.response?.data || error.message);
     throw error;
   }
 };
 
-/**
- * 4. إضافة اشتراك جديد
- * ترسل البيانات المطلوبة في جسم الطلب (body) مثل:
- * {
- *    user_id: 123, channel_id: -100123456, telegram_id: 987654321,
- *    expiry_date: "2025-02-28T00:00:00Z", subscription_type_id: 1,
- *    subscription_plan_id: 2, payment_id: "abc123", source: "manual", is_active: true
- * }
- */
-export const addSubscription = async (data) => {
+export const cancelSubscriptionAdmin = async (data) => {
+  // دالة جديدة للإلغاء
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/admin/subscriptions`, data, {
+    const response = await axios.post(`${API_BASE_URL}/api/admin/subscriptions/cancel`, data, {
       headers: getAuthHeaders(),
     });
     return response.data;
   } catch (error) {
+    console.error("Error in cancelSubscriptionAdmin:", error.response?.data || error.message);
     throw error;
   }
 };
-
 /**
  * تسجيل الدخول باستخدام Google:
  * يُرسل id_token إلى الخادم للحصول على access_token و role.

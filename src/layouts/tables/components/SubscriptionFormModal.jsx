@@ -1,6 +1,5 @@
-// layouts/tables/components/SubscriptionFormModal.jsx
+// src/layouts/tables/components/SubscriptionFormModal.jsx
 import React, { useState, useEffect } from "react";
-
 import {
   Dialog,
   DialogTitle,
@@ -8,7 +7,7 @@ import {
   DialogActions,
   MenuItem,
   Grid,
-  TextField,
+  TextField, // يستخدم بواسطة DatePicker
 } from "@mui/material";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -17,99 +16,116 @@ import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
 
+// وضعنا الافتراضي لـ "add_or_renew"
 const SubscriptionFormModal = ({
   open,
   onClose,
   onSubmit,
   initialValues = {},
   subscriptionTypes = [],
-  availableSources = [], // Kept for future flexibility, though not used for selection in the current logic
-  isEdit = false,
+  // availableSources لا نستخدمه كقائمة اختيار الآن للمصدر
+  mode = "add_or_renew", // "add_or_renew" أو "edit_existing"
 }) => {
-  const [formData, setFormData] = useState({
-    telegram_id: "",
-    full_name: "",
-    username: "",
-    subscription_type_id: "",
-    expiry_date: null,
-    source: "", // Initial value
-  });
+  const isAddOrRenewMode = mode === "add_or_renew";
+  const isEditExistingMode = mode === "edit_existing";
+
+  const getDefaultFormData = () => {
+    if (isAddOrRenewMode) {
+      return {
+        telegram_id: "",
+        full_name: "",
+        username: "",
+        subscription_type_id: "",
+        days_to_add: "30", // قيمة افتراضية لعدد الأيام
+        // المصدر يتم تعيينه في الخادم الآن لـ admin_manual
+      };
+    }
+    // isEditExistingMode
+    return {
+      telegram_id: initialValues?.telegram_id || "",
+      full_name: initialValues?.full_name || "", // يمكن تعديله
+      username: initialValues?.username || "", // يمكن تعديله
+      subscription_type_id: initialValues?.subscription_type_id || "", // لا يمكن تعديله عادةً
+      expiry_date: initialValues?.expiry_date ? dayjs(initialValues.expiry_date) : null,
+      source: initialValues?.source || "manual", // المصدر الحالي، يمكن تعديله
+      // حقول أخرى قد ترغب في تعديلها مثل payment_id (إذا كان مسموحًا)
+    };
+  };
+
+  const [formData, setFormData] = useState(getDefaultFormData());
 
   useEffect(() => {
     if (open) {
-      if (isEdit && initialValues && Object.keys(initialValues).length > 0) {
-        setFormData({
-          telegram_id: initialValues.telegram_id || "",
-          full_name: initialValues.full_name || "",
-          username: initialValues.username || "",
-          subscription_type_id: initialValues.subscription_type_id || "",
-          expiry_date: initialValues.expiry_date ? dayjs(initialValues.expiry_date) : null,
-          // --- MODIFICATION HERE ---
-          // If the original source is empty/null/undefined, set a default value.
-          // "unknown" is a suggestion; you can use "manual" or any other default
-          // that makes sense and is acceptable by your backend.
-          source: initialValues.source || "manual",
-        });
-      } else {
-        // Add mode
-        setFormData({
-          telegram_id: "",
-          full_name: "",
-          username: "",
-          subscription_type_id: "",
-          expiry_date: null,
-          source: "manual", // Default source for new subscriptions
-        });
-      }
+      setFormData(getDefaultFormData());
     }
-  }, [initialValues, open, isEdit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValues, open, mode]); // أضف mode هنا
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDateChange = (newDate) => {
-    setFormData({ ...formData, expiry_date: newDate });
+    setFormData((prev) => ({ ...prev, expiry_date: newDate }));
   };
 
   const handleSubmit = () => {
-    const expiryDateISO = formData.expiry_date
-      ? formData.expiry_date
-          .set("hour", 0)
-          .set("minute", 0)
-          .set("second", 1)
-          .set("millisecond", 600)
-          .toISOString()
-      : null;
+    let processedData = { ...formData };
+    let missingFields = false;
 
-    // The formData.source will now have a value ('unknown' or original, or 'manual' for new)
-    // so the !formData.source check should pass if a default is set for empty original sources.
-    if (
-      !formData.telegram_id ||
-      !formData.full_name ||
-      !formData.username ||
-      !formData.subscription_type_id ||
-      !expiryDateISO ||
-      !formData.source // This check remains, but source should now always have a value
-    ) {
-      // Consider using a more user-friendly notification (e.g., a Snackbar) instead of alert
-      alert("Please fill in all required fields, including a valid expiry date.");
-      return;
+    if (isAddOrRenewMode) {
+      if (
+        !formData.telegram_id ||
+        !formData.subscription_type_id ||
+        !formData.days_to_add ||
+        isNaN(parseInt(formData.days_to_add, 10)) || // تحقق من أنه رقم
+        parseInt(formData.days_to_add, 10) <= 0 // تحقق من أنه أكبر من صفر
+      ) {
+        missingFields = true;
+      }
+      // full_name و username اختياريان عند الإضافة/التجديد، الخادم سيتعامل مع المستخدم الموجود
+      processedData.days_to_add = parseInt(formData.days_to_add, 10);
+      // لا نرسل expiry_date في هذا الوضع
+      delete processedData.expiry_date;
+    } else if (isEditExistingMode) {
+      const expiryDateISO = formData.expiry_date
+        ? formData.expiry_date
+            // .set("hour", 0) // قد ترغب في إبقاء الوقت الأصلي أو تعيينه
+            // .set("minute", 0)
+            // .set("second", 1)
+            // .set("millisecond", 600)
+            .toISOString()
+        : null;
+
+      if (
+        !formData.telegram_id ||
+        !formData.subscription_type_id ||
+        !expiryDateISO || // تاريخ الانتهاء مطلوب للتعديل
+        !formData.source
+      ) {
+        missingFields = true;
+      }
+      processedData.expiry_date = expiryDateISO;
+      // لا نرسل days_to_add في هذا الوضع
+      delete processedData.days_to_add;
     }
 
-    const processedData = {
-      ...formData,
-      expiry_date: expiryDateISO,
-    };
-    onSubmit(processedData);
+    if (missingFields) {
+      alert("Please fill in all required fields with valid values.");
+      return;
+    }
+    onSubmit(processedData, mode, initialValues?.id); // نمرر mode و subscription_id للتعديل
   };
+
+  const title = isAddOrRenewMode ? "Add / Renew Subscription" : "Edit Subscription";
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
         <DialogTitle>
           <MDTypography component="div" variant="h5" fontWeight="bold" color="dark">
-            {isEdit ? "Edit Subscription" : "Add New Subscription"}
+            {title}
           </MDTypography>
         </DialogTitle>
         <DialogContent sx={{ p: 3 }}>
@@ -123,32 +139,36 @@ const SubscriptionFormModal = ({
                 value={formData.telegram_id}
                 onChange={handleChange}
                 required
-                disabled={isEdit}
+                disabled={isEditExistingMode} // لا يمكن تعديل Telegram ID للاشتراك القائم
               />
             </Grid>
-            <Grid item xs={12}>
-              <MDInput
-                label="Full Name"
-                name="full_name"
-                type="text"
-                fullWidth
-                value={formData.full_name}
-                onChange={handleChange}
-                required
-                // Full Name is always editable
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <MDInput
-                label="Username"
-                name="username"
-                type="text"
-                fullWidth
-                value={formData.username}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
+            {/* full_name و username يمكن إظهارهما أو إخفاؤهما حسب الحاجة */}
+            {/* في وضع الإضافة/التجديد، الخادم سيتعامل مع إنشاء/تحديث المستخدم */}
+            {/* في وضع التعديل، يمكن تعديلها إذا أردت */}
+            {(isAddOrRenewMode || isEditExistingMode) && ( // إظهارهما دائمًا كمثال
+              <>
+                <Grid item xs={12}>
+                  <MDInput
+                    label="Full Name (Optional for existing user)"
+                    name="full_name"
+                    type="text"
+                    fullWidth
+                    value={formData.full_name}
+                    onChange={handleChange}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <MDInput
+                    label="Username (Optional for existing user)"
+                    name="username"
+                    type="text"
+                    fullWidth
+                    value={formData.username}
+                    onChange={handleChange}
+                  />
+                </Grid>
+              </>
+            )}
             <Grid item xs={12}>
               <MDInput
                 select
@@ -158,20 +178,11 @@ const SubscriptionFormModal = ({
                 value={formData.subscription_type_id}
                 onChange={handleChange}
                 required
-                disabled={isEdit}
+                disabled={isEditExistingMode} // لا يمكن تعديل نوع الاشتراك للاشتراك القائم
                 SelectProps={{
-                  MenuProps: {
-                    MenuListProps: {
-                      sx: {
-                        paddingTop: "4px",
-                        paddingBottom: "4px",
-                      },
-                    },
-                  },
+                  MenuProps: { MenuListProps: { sx: { paddingTop: "4px", paddingBottom: "4px" } } },
                 }}
-                InputLabelProps={{
-                  shrink: true,
-                }}
+                InputLabelProps={{ shrink: true }}
               >
                 <MenuItem value="" disabled>
                   <em>Select Subscription Type</em>
@@ -187,69 +198,54 @@ const SubscriptionFormModal = ({
                 ))}
               </MDInput>
             </Grid>
-            <Grid item xs={12}>
-              <MDInput
-                select
-                label="Source"
-                name="source"
-                fullWidth
-                value={formData.source} // This will be 'manual' in add mode, or the original/defaulted source in edit mode
-                onChange={handleChange} // Kept for consistency, but field is disabled
-                required
-                disabled={true} // Always disabled
-                SelectProps={{
-                  MenuProps: {
-                    MenuListProps: {
-                      sx: {
-                        paddingTop: "4px",
-                        paddingBottom: "4px",
-                      },
-                    },
-                  },
-                }}
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              >
-                {/*
-                  The MenuItem logic here ensures that the correct value is displayed
-                  in the disabled select field.
-                  - For new subscriptions, 'manual' is shown.
-                  - For existing subscriptions, the actual (or defaulted 'unknown') source is shown.
-                */}
-                {formData.source && ( // Check if formData.source has a value to display
-                  <MenuItem key={formData.source} value={formData.source}>
-                    {/* Capitalize first letter for display if desired, e.g., formData.source.charAt(0).toUpperCase() + formData.source.slice(1) */}
-                    {formData.source}
-                  </MenuItem>
-                )}
-                {/*
-                  If you wanted to ensure a MenuItem is always present even if formData.source
-                  could somehow be empty (though our useEffect logic prevents this for 'source'),
-                  you might have more complex logic here. But given current setup, this is fine.
-                */}
-              </MDInput>
-            </Grid>
-            <Grid item xs={12}>
-              <DatePicker
-                label="Expiry Date"
-                value={formData.expiry_date}
-                onChange={handleDateChange}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    fullWidth
-                    required
-                    variant="standard" // MDInput is typically 'standard' or 'outlined', ensure consistency
-                    InputLabelProps={{
-                      ...params.InputLabelProps,
-                      shrink: true,
-                    }}
-                    // helperText={params.error ? "Invalid date format" : ""} // Example error handling
+
+            {isAddOrRenewMode && (
+              <Grid item xs={12}>
+                <MDInput
+                  label="Days to Add"
+                  name="days_to_add"
+                  type="number"
+                  fullWidth
+                  value={formData.days_to_add}
+                  onChange={handleChange}
+                  required
+                  inputProps={{ min: 1 }} // تأكد من أن الأيام موجبة
+                />
+              </Grid>
+            )}
+
+            {isEditExistingMode && (
+              <>
+                <Grid item xs={12}>
+                  <DatePicker
+                    label="Expiry Date"
+                    value={formData.expiry_date}
+                    onChange={handleDateChange}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        fullWidth
+                        required
+                        variant="standard"
+                        InputLabelProps={{ ...params.InputLabelProps, shrink: true }}
+                      />
+                    )}
                   />
-                )}
-              />
-            </Grid>
+                </Grid>
+                <Grid item xs={12}>
+                  <MDInput
+                    label="Source" // يمكن تعديل المصدر في وضع التعديل
+                    name="source"
+                    type="text"
+                    fullWidth
+                    value={formData.source}
+                    onChange={handleChange}
+                    required
+                  />
+                  {/* يمكنك أيضًا استخدام قائمة منسدلة للمصادر إذا كانت محددة */}
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 2 }}>
@@ -257,7 +253,7 @@ const SubscriptionFormModal = ({
             Cancel
           </MDButton>
           <MDButton onClick={handleSubmit} color="primary" variant="gradient">
-            {isEdit ? "Update" : "Add"}
+            {isAddOrRenewMode ? "Add / Renew" : "Update"}
           </MDButton>
         </DialogActions>
       </Dialog>

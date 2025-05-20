@@ -2,32 +2,28 @@
 import React, { useState, useEffect, forwardRef } from "react";
 import {
   Dialog,
-  DialogTitle, // Changed from MuiDialogTitle
-  DialogContent, // Changed from MuiDialogContent
-  DialogActions, // Changed from MuiDialogActions
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   MenuItem,
   Grid,
   CircularProgress,
-  // IconButton, // No longer needed for close button in title
   Alert as MuiAlert,
-  TextField, // Added for DatePicker renderInput if needed, though MDInput is preferred
+  // TextField, // لا نحتاجه الآن لـ DatePicker
 } from "@mui/material";
-import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs from "dayjs";
-import "dayjs/locale/ar"; // Import the Arabic locale for dayjs
+// لا نحتاج DatePicker أو dayjs هنا الآن
+// import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+// import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+// import dayjs from "dayjs";
+// import "dayjs/locale/ar";
 
-// Material Dashboard Components
-// import MDBox from "components/MDBox"; // Still used, ensure it's imported if needed
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-// import { Close } from "@mui/icons-material"; // No longer needed for close button in title
 
-// API
-import { getSubscriptionTypes, addSubscription } from "../../../services/api";
+// API - تأكد من أن هذه الدالة تستدعي النقطة الصحيحة التي تتوقع days_to_add
+import { getSubscriptionTypes, addOrRenewSubscriptionAdmin } from "../../../services/api"; // تم تغيير اسم الدالة
 
-// Custom Alert
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
   return (
     <MuiAlert elevation={0} ref={ref} variant="filled" {...props} sx={{ mb: 2, width: "100%" }} />
@@ -36,45 +32,33 @@ const CustomAlert = forwardRef(function CustomAlert(props, ref) {
 
 const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
   const [loading, setLoading] = useState(false);
-  const [subscriptionTypesData, setSubscriptionTypesData] = useState([]); // Renamed for clarity
+  const [subscriptionTypesData, setSubscriptionTypesData] = useState([]);
   const [typesLoading, setTypesLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const initialFormData = {
-    telegram_id: "",
-    full_name: "",
-    username: "",
+  const getInitialFormData = (currentUser) => ({
+    telegram_id: currentUser?.telegram_id || "",
+    full_name: currentUser?.full_name || "", // سيمرر للخادم، يمكن للخادم استخدامه إذا كان المستخدم جديدًا
+    username: currentUser?.username
+      ? currentUser.username.startsWith("@")
+        ? currentUser.username
+        : `@${currentUser.username}`
+      : "", // سيمرر للخادم
     subscription_type_id: "",
-    expiry_date: null,
-    source: "manual",
-  };
-  const [formData, setFormData] = useState(initialFormData);
+    days_to_add: "30", // حقل جديد، وقيمة افتراضية
+    // المصدر يتم تعيينه في الخادم ("admin_manual")، لا حاجة لإرساله من هنا
+  });
+
+  const [formData, setFormData] = useState(getInitialFormData(user));
 
   useEffect(() => {
     if (open) {
-      // dayjs.locale('ar'); // Set locale if needed globally or higher up
       setError(null);
       fetchSubscriptionTypes();
-
-      if (user) {
-        setFormData({
-          telegram_id: user.telegram_id || "",
-          full_name: user.full_name || "",
-          username: user.username
-            ? user.username.startsWith("@")
-              ? user.username
-              : `@${user.username}`
-            : "",
-          subscription_type_id: "", // Reset on open
-          expiry_date: null, // Reset on open
-          source: "manual",
-        });
-      } else {
-        // Should ideally not happen if 'user' is always provided for this dialog
-        setFormData(initialFormData);
-      }
+      // تحديث formData بمعلومات المستخدم عند فتح الـ dialog
+      setFormData(getInitialFormData(user));
     }
-  }, [open, user]); // initialFormData is stable, so removed from deps
+  }, [open, user]);
 
   const fetchSubscriptionTypes = async () => {
     setTypesLoading(true);
@@ -90,251 +74,197 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    if (error) setError(null);
-  };
-
-  const handleDateChange = (newDate) => {
-    setFormData({ ...formData, expiry_date: newDate });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (error) setError(null);
   };
 
   const handleSubmit = async (event) => {
-    // No event.preventDefault() if Dialog PaperProps has component='form' and onSubmit is there
-    // If it's passed to MDButton type="submit", then preventDefault on the form onSubmit might be needed if that button isn't type="submit"
-    // However, since we attach onSubmit to PaperProps, we don't need it on the button
-    // If button has type="submit" and PaperProps has onSubmit, the PaperProps one will be called.
-    if (event) event.preventDefault(); // Keep for safety if MDButton click is directly calling this.
+    if (event) event.preventDefault();
 
-    if (!formData.subscription_type_id || !formData.expiry_date) {
-      setError("يرجى اختيار نوع الاشتراك وتحديد تاريخ انتهاء صالح.");
+    const daysToAddNum = parseInt(formData.days_to_add, 10);
+
+    if (!formData.subscription_type_id || !formData.days_to_add) {
+      setError("يرجى اختيار نوع الاشتراك وتحديد عدد أيام الإضافة.");
       return;
     }
-    const expiryDateDayjs = dayjs(formData.expiry_date);
-    if (!expiryDateDayjs.isValid() || expiryDateDayjs.isBefore(dayjs(), "day")) {
-      setError("تاريخ الانتهاء يجب أن يكون تاريخًا مستقبليًا صالحًا.");
+    if (isNaN(daysToAddNum) || daysToAddNum <= 0) {
+      setError("عدد أيام الإضافة يجب أن يكون رقمًا صحيحًا موجبًا.");
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const expiryDateISO = expiryDateDayjs
-      .set("hour", 23) // end of day for expiry
-      .set("minute", 59)
-      .set("second", 59)
-      .set("millisecond", 999)
-      .toISOString();
     try {
+      // البيانات التي سترسل إلى الخادم
       const submissionData = {
-        telegram_id: user.telegram_id, // Critical: use user.telegram_id from prop, not formData
+        telegram_id: formData.telegram_id, // من المستخدم الممرر
+        full_name: formData.full_name, // اختياري، للخادم
+        username: formData.username, // اختياري، للخادم
         subscription_type_id: formData.subscription_type_id,
-        expiry_date: expiryDateISO,
-        source: formData.source,
+        days_to_add: daysToAddNum,
       };
-      await addSubscription(submissionData);
+      // استدعاء الدالة المحدثة في api.js
+      await addOrRenewSubscriptionAdmin(submissionData);
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
-      console.error("Error adding subscription:", err);
+      console.error("Error adding/renewing subscription:", err);
       const errorMessage =
         err.response?.data?.detail ||
         err.response?.data?.error ||
         err.message ||
-        "فشل في إضافة الاشتراك. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
+        "فشل في إضافة/تجديد الاشتراك. يرجى التحقق من البيانات والمحاولة مرة أخرى.";
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  // لا نحتاج LocalizationProvider هنا بعد إزالة DatePicker
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ar">
-      <Dialog
-        open={open}
-        onClose={!loading ? onClose : undefined} // Allow close if not loading
-        fullWidth
-        maxWidth="sm"
-        dir="rtl" // Keep RTL direction
-        PaperProps={{ component: "form", onSubmit: handleSubmit }}
-      >
-        <DialogTitle>
-          <MDTypography variant="h5" fontWeight="bold" color="dark">
-            إضافة اشتراك جديد للمستخدم
-          </MDTypography>
-        </DialogTitle>
+    <Dialog
+      open={open}
+      onClose={!loading ? onClose : undefined}
+      fullWidth
+      maxWidth="sm"
+      dir="rtl"
+      PaperProps={{ component: "form", onSubmit: handleSubmit }}
+    >
+      <DialogTitle>
+        <MDTypography variant="h5" fontWeight="bold" color="dark">
+          إضافة/تجديد اشتراك للمستخدم
+        </MDTypography>
+      </DialogTitle>
 
-        <DialogContent sx={{ p: 3 }}>
-          {error && <CustomAlert severity="error">{error}</CustomAlert>}
-          <Grid container spacing={3}>
-            {" "}
-            {/* Consistent spacing with SubscriptionFormModal */}
-            {/* User Information Fields - Disabled */}
-            <Grid item xs={12}>
-              <MDInput
-                label="معرف تلجرام"
-                name="telegram_id"
-                fullWidth
-                value={formData.telegram_id}
-                disabled // Always disabled, comes from user prop
-                InputLabelProps={{ shrink: true }} // Shrink label as value is pre-filled
-                // variant="standard" // MDInput is usually standard by default
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <MDInput
-                label="الاسم الكامل"
-                name="full_name"
-                fullWidth
-                value={formData.full_name}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <MDInput
-                label="اسم المستخدم"
-                name="username"
-                fullWidth
-                value={formData.username}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            {/* Subscription Details Fields */}
-            <Grid item xs={12}>
-              <MDInput
-                select
-                label="نوع الاشتراك"
-                name="subscription_type_id"
-                fullWidth
-                value={formData.subscription_type_id}
-                onChange={handleChange}
-                required
-                disabled={typesLoading || loading}
-                error={!!error && !formData.subscription_type_id} // Basic error indication
-                helperText={
-                  !!error && !formData.subscription_type_id
-                    ? "هذا الحقل مطلوب"
-                    : typesLoading
-                    ? "جاري تحميل الأنواع..."
-                    : ""
-                }
-                SelectProps={{
-                  displayEmpty: true,
-                  MenuProps: {
-                    MenuListProps: {
-                      sx: {
-                        paddingTop: "4px",
-                        paddingBottom: "4px",
-                      },
-                    },
-                    PaperProps: { sx: { maxHeight: 200 } },
-                  },
-                }}
-                InputLabelProps={{ shrink: true }} // Important for select with value
-                InputProps={{
-                  // For loading indicator inside select
-                  endAdornment: typesLoading ? (
-                    <CircularProgress
-                      color="inherit"
-                      size={20}
-                      sx={{ mr: 2, position: "absolute", right: "28px" }}
-                    />
-                  ) : null,
-                }}
-              >
-                <MenuItem value="" disabled>
-                  <em>اختر نوع الاشتراك...</em>
-                </MenuItem>
-                {subscriptionTypesData.map((type) => (
-                  <MenuItem
-                    key={type.id}
-                    value={type.id}
-                    sx={{ paddingTop: "8px", paddingBottom: "8px" }} // Consistent item padding
-                  >
-                    {type.name}
-                  </MenuItem>
-                ))}
-                {!typesLoading && subscriptionTypesData.length === 0 && (
-                  <MenuItem value="" disabled>
-                    لا توجد أنواع متاحة.
-                  </MenuItem>
-                )}
-              </MDInput>
-            </Grid>
-            <Grid item xs={12}>
-              <DatePicker
-                label="تاريخ انتهاء الاشتراك"
-                value={formData.expiry_date}
-                onChange={handleDateChange}
-                minDate={dayjs().add(1, "day")}
-                disabled={loading}
-                format="YYYY/MM/DD" // format for v6+, inputFormat for v5
-                renderInput={(params) => (
-                  <TextField // Using TextField as in SubscriptionFormModal's DatePicker example
-                    {...params}
-                    fullWidth
-                    required
-                    variant="standard" // Consistent variant
-                    InputLabelProps={{
-                      ...params.InputLabelProps,
-                      shrink: true,
-                    }}
-                    error={
-                      !!error &&
-                      (!formData.expiry_date ||
-                        !dayjs(formData.expiry_date).isValid() ||
-                        dayjs(formData.expiry_date).isBefore(dayjs(), "day"))
-                    }
-                    helperText={
-                      params.error
-                        ? "صيغة تاريخ غير صالحة"
-                        : !!error &&
-                          (!formData.expiry_date ||
-                            !dayjs(formData.expiry_date).isValid() ||
-                            dayjs(formData.expiry_date).isBefore(dayjs(), "day"))
-                        ? "تاريخ انتهاء صالح ومستقبلي مطلوب"
-                        : ""
-                    }
-                  />
-                )}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <MDInput
-                // select // Making it consistent, even if only one option for now
-                label="المصدر"
-                name="source"
-                fullWidth
-                value={formData.source}
-                disabled // Always disabled
-                InputLabelProps={{ shrink: true }}
-                // If it were a select:
-                // SelectProps={{ MenuProps: { MenuListProps: { sx: { paddingTop: "4px", paddingBottom: "4px" } } } }}
-              >
-                {/* If it were a select: <MenuItem value="manual">manual</MenuItem> */}
-              </MDInput>
-            </Grid>
+      <DialogContent sx={{ p: 3 }}>
+        {error && <CustomAlert severity="error">{error}</CustomAlert>}
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <MDInput
+              label="معرف تلجرام"
+              name="telegram_id"
+              fullWidth
+              value={formData.telegram_id}
+              disabled
+              InputLabelProps={{ shrink: true }}
+            />
           </Grid>
-        </DialogContent>
+          <Grid item xs={12}>
+            <MDInput
+              label="الاسم الكامل (اختياري إذا كان المستخدم موجودًا)"
+              name="full_name"
+              fullWidth
+              value={formData.full_name}
+              onChange={handleChange} // اسمح بتعديله إذا أراد المسؤول تحديثه
+              InputLabelProps={{ shrink: !!formData.full_name }} // أضف shrink إذا كان هناك قيمة
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <MDInput
+              label="اسم المستخدم (اختياري إذا كان المستخدم موجودًا)"
+              name="username"
+              fullWidth
+              value={formData.username}
+              onChange={handleChange} // اسمح بتعديله
+              InputLabelProps={{ shrink: !!formData.username }} // أضف shrink إذا كان هناك قيمة
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <MDInput
+              select
+              label="نوع الاشتراك"
+              name="subscription_type_id"
+              fullWidth
+              value={formData.subscription_type_id}
+              onChange={handleChange}
+              required
+              disabled={typesLoading || loading}
+              error={!!error && !formData.subscription_type_id}
+              helperText={
+                !!error && !formData.subscription_type_id
+                  ? "هذا الحقل مطلوب"
+                  : typesLoading
+                  ? "جاري تحميل الأنواع..."
+                  : ""
+              }
+              SelectProps={{
+                displayEmpty: true,
+                MenuProps: {
+                  MenuListProps: { sx: { paddingTop: "4px", paddingBottom: "4px" } },
+                  PaperProps: { sx: { maxHeight: 200 } },
+                },
+              }}
+              InputLabelProps={{ shrink: true }}
+              InputProps={{
+                endAdornment: typesLoading ? (
+                  <CircularProgress
+                    color="inherit"
+                    size={20}
+                    sx={{ mr: 2, position: "absolute", right: "28px" }}
+                  />
+                ) : null,
+              }}
+            >
+              <MenuItem value="" disabled>
+                <em>اختر نوع الاشتراك...</em>
+              </MenuItem>
+              {subscriptionTypesData.map((type) => (
+                <MenuItem
+                  key={type.id}
+                  value={type.id}
+                  sx={{ paddingTop: "8px", paddingBottom: "8px" }}
+                >
+                  {type.name}
+                </MenuItem>
+              ))}
+              {!typesLoading && subscriptionTypesData.length === 0 && (
+                <MenuItem value="" disabled>
+                  لا توجد أنواع متاحة.
+                </MenuItem>
+              )}
+            </MDInput>
+          </Grid>
+          <Grid item xs={12}>
+            <MDInput
+              label="عدد أيام الإضافة/التجديد"
+              name="days_to_add"
+              type="number" // تغيير النوع إلى number
+              fullWidth
+              value={formData.days_to_add}
+              onChange={handleChange}
+              required
+              disabled={loading}
+              error={!!error && (!formData.days_to_add || parseInt(formData.days_to_add, 10) <= 0)}
+              helperText={
+                !!error && (!formData.days_to_add || parseInt(formData.days_to_add, 10) <= 0)
+                  ? "عدد أيام موجب مطلوب"
+                  : ""
+              }
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ min: 1 }} // لمتصفحات HTML5
+            />
+          </Grid>
+          {/* لم نعد بحاجة لحقل المصدر هنا، الخادم سيعينه */}
+        </Grid>
+      </DialogContent>
 
-        <DialogActions sx={{ p: 3, pt: 2 }}>
-          {" "}
-          {/* Consistent padding with SubscriptionFormModal */}
-          <MDButton onClick={onClose} color="secondary" variant="text" disabled={loading}>
-            إلغاء
-          </MDButton>
-          <MDButton
-            type="submit" // This will trigger PaperProps onSubmit
-            color="info" // Changed to 'info' as per original AddSubscriptionDialog
-            variant="gradient"
-            disabled={loading || typesLoading}
-            startIcon={loading ? <CircularProgress size={20} color="white" /> : null}
-          >
-            {loading ? "جاري الإضافة..." : "إضافة الاشتراك"}
-          </MDButton>
-        </DialogActions>
-      </Dialog>
-    </LocalizationProvider>
+      <DialogActions sx={{ p: 3, pt: 2 }}>
+        <MDButton onClick={onClose} color="secondary" variant="text" disabled={loading}>
+          إلغاء
+        </MDButton>
+        <MDButton
+          type="submit"
+          color="info"
+          variant="gradient"
+          disabled={loading || typesLoading}
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null} // غيرت لون الدائرة لـ inherit
+        >
+          {loading ? "جاري التنفيذ..." : "إضافة/تجديد الاشتراك"}
+        </MDButton>
+      </DialogActions>
+    </Dialog>
   );
 };
 

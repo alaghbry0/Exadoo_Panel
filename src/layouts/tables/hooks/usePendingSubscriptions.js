@@ -1,45 +1,44 @@
 // ./hooks/usePendingSubscriptions.js
 import { useState, useEffect, useCallback } from "react";
 import {
-  getPendingSubscriptions, // API call to fetch paginated pending subscriptions
+  getPendingSubscriptions,
   getPendingSubscriptionsStats,
   handleSinglePendingSubscriptionAction,
   handleBulkPendingSubscriptionsAction,
-} from "../services/api"; // Assuming this is your API service file
+} from "../services/api";
 
 export function usePendingSubscriptions(
   showSnackbar,
-  refreshPrimarySubscriptions, // Callback to refresh subscriptions on main tab
-  refreshLegacyTabCount // Callback to refresh legacy count
-  // refreshActiveSubscriptionsCount // Not directly used here, but passed from parent
+  refreshPrimarySubscriptions,
+  refreshLegacyTabCount
 ) {
-  const [pendingData, setPendingData] = useState([]); // Renamed from pendingSubscriptions for clarity
+  const [pendingData, setPendingData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const [tableQueryOptions, setTableQueryOptions] = useState({
-    page: 1, // 1-indexed for API
+    // مُحدِّث الحالة المباشر
+    page: 1,
     pageSize: 20,
   });
 
-  const [statusFilter, setStatusFilter] = useState("pending"); // 'pending', 'complete', 'all'
-  const [searchTerm, setSearchTerm] = useState(""); // Internal search term state
+  const [statusFilter, setStatusFilter] = useState("pending");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [totalRecords, setTotalRecords] = useState(0);
-  const [stats, setStats] = useState({ pending: 0, complete: 0, total_all: 0 }); // Renamed from pendingStats
+  const [stats, setStats] = useState({ pending: 0, complete: 0, total_all: 0 });
 
   const [bulkProcessingLoading, setBulkProcessingLoading] = useState(false);
   const [bulkProcessResult, setBulkProcessResult] = useState(null);
   const [bulkResultModalOpen, setBulkResultModalOpen] = useState(false);
 
   const fetchStats = useCallback(async () => {
-    // No changes needed here if it works as intended
     try {
       const statsData = await getPendingSubscriptionsStats();
       setStats(statsData || { pending: 0, complete: 0, total_all: 0 });
     } catch (err) {
       console.error("Error fetching pending stats:", err);
-      setStats({ pending: 0, complete: 0, total_all: 0 }); // Reset on error
+      setStats({ pending: 0, complete: 0, total_all: 0 });
     }
   }, []);
 
@@ -55,7 +54,6 @@ export function usePendingSubscriptions(
           search: currentSearchTerm || undefined,
         };
 
-        // Clean params (remove undefined/null/empty string)
         Object.keys(paramsToSend).forEach((key) => {
           if (
             paramsToSend[key] === undefined ||
@@ -71,9 +69,6 @@ export function usePendingSubscriptions(
         if (responseData && responseData.data) {
           setPendingData(responseData.data || []);
           setTotalRecords(responseData.total || 0);
-          // API now returns pending_count_for_filter, which can be used if needed,
-          // but totalRecords is the primary count for pagination.
-          // Stats are fetched separately.
         } else {
           console.error("[fetchData pending] Unexpected API response:", responseData);
           if (showSnackbar)
@@ -99,51 +94,47 @@ export function usePendingSubscriptions(
     [showSnackbar]
   );
 
-  // Effect to fetch stats on mount
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
-  // Effect to fetch data when relevant filters or query options change
   useEffect(() => {
-    // console.log("Pending Hook: Fetching data due to change in queryOpts, statusFilter, or searchTerm");
     fetchData(tableQueryOptions, statusFilter, searchTerm);
   }, [fetchData, tableQueryOptions, statusFilter, searchTerm]);
 
   const handleStatusFilterChange = useCallback((newStatus) => {
     setStatusFilter(newStatus);
-    setTableQueryOptions((prev) => ({ ...prev, page: 1 })); // Reset page
+    setTableQueryOptions((prev) => ({ ...prev, page: 1 }));
   }, []);
 
-  const handleTableQueryOptionsChange = useCallback((newOptions) => {
-    // newOptions could be { page: newPage } or { pageSize: newPageSize, page: 1 }
-    setTableQueryOptions((prev) => ({ ...prev, ...newOptions }));
-  }, []);
+  // الدالة handleTableQueryOptionsChange لم تعد ضرورية هنا
+  // const handleTableQueryOptionsChange = useCallback((newOptions) => {
+  //   setTableQueryOptions((prev) => ({ ...prev, ...newOptions }));
+  // }, []);
 
   const handleMarkComplete = useCallback(
     async (id) => {
-      // Removed currentGlobalSearchTerm, will use internal searchTerm
-      // setLoading(true); // Consider a specific loading state for single action
       try {
         const result = await handleSinglePendingSubscriptionAction(id);
         if (result.success) {
           if (showSnackbar) showSnackbar(result.message || "Subscription processed!", "success");
-          await fetchData(tableQueryOptions, statusFilter, searchTerm); // Refetch current view
+          // fetchData سيتم استدعاؤه تلقائيًا بواسطة useEffect بسبب تغيير tableQueryOptions
+          // أو إذا لم يتغير، يمكن استدعاؤه يدويًا إذا كنت تريد ضمان التحديث الفوري
+          await fetchData(tableQueryOptions, statusFilter, searchTerm); // ضمان التحديث
           await fetchStats();
-          if (refreshPrimarySubscriptions) await refreshPrimarySubscriptions(searchTerm); // Pass current search
+          if (refreshPrimarySubscriptions) await refreshPrimarySubscriptions(searchTerm);
           if (refreshLegacyTabCount) await refreshLegacyTabCount(undefined, searchTerm);
         } else {
           if (showSnackbar) showSnackbar(result.error || "Failed to process.", "error");
         }
       } catch (err) {
-        // ... error handling ...
-      } finally {
-        // setLoading(false);
+        console.error("Error marking pending subscription as complete:", err);
+        if (showSnackbar) showSnackbar(err.message || "Error processing subscription.", "error");
       }
     },
     [
       showSnackbar,
-      fetchData,
+      fetchData, // أضف fetchData هنا إذا كنت ستستدعيه مباشرة
       tableQueryOptions,
       statusFilter,
       searchTerm,
@@ -154,31 +145,36 @@ export function usePendingSubscriptions(
   );
 
   const handleBulkProcess = useCallback(async () => {
-    // Removed currentGlobalSearchTerm, bulk usually processes all pending
     setBulkProcessingLoading(true);
     setBulkProcessResult(null);
     try {
-      // Bulk action might not need search term if it processes all 'pending' regardless of current search view
-      const result = await handleBulkPendingSubscriptionsAction({
-        /* criteria if any */
-      });
+      const result = await handleBulkPendingSubscriptionsAction({});
       setBulkProcessResult(result);
       setBulkResultModalOpen(true);
       if (showSnackbar) {
-        /* ... snackbar logic ... */
+        if (result.error) {
+          showSnackbar(result.message || "Bulk processing encountered errors.", "warning");
+        } else {
+          showSnackbar(result.message || "Bulk processing initiated.", "info");
+        }
       }
-      await fetchData(tableQueryOptions, statusFilter, searchTerm); // Refetch
+      // استدعاء fetchData لضمان تحديث البيانات المعروضة
+      await fetchData(tableQueryOptions, statusFilter, searchTerm);
       await fetchStats();
       if (refreshPrimarySubscriptions) await refreshPrimarySubscriptions(searchTerm);
       if (refreshLegacyTabCount) await refreshLegacyTabCount(undefined, searchTerm);
     } catch (err) {
-      // ... error handling ...
+      console.error("Error during bulk processing:", err);
+      const errorMessage = err.message || "An error occurred during bulk processing.";
+      setBulkProcessResult({ error: true, message: errorMessage }); // عرض خطأ عام
+      setBulkResultModalOpen(true);
+      if (showSnackbar) showSnackbar(errorMessage, "error");
     } finally {
       setBulkProcessingLoading(false);
     }
   }, [
     showSnackbar,
-    fetchData,
+    fetchData, // أضف fetchData هنا
     tableQueryOptions,
     statusFilter,
     searchTerm,
@@ -197,19 +193,19 @@ export function usePendingSubscriptions(
     error,
     setError,
     tableQueryOptions,
-    setTableQueryOptions: handleTableQueryOptionsChange,
+    setTableQueryOptions, // <-- التغيير: أرجع مُحدِّث الحالة المباشر
     totalRecords,
-    stats, // Renamed from pendingStats
-    statusFilter, // Renamed from currentPendingFilter
+    stats,
+    statusFilter,
     handleStatusFilterChange,
-    setSearchTerm, // To be called from parent when globalSearchTerm changes for this tab
-    fetchData, // Expose if direct refresh is needed, though useEffect should handle most cases
-    fetchStats, // Expose if manual stat refresh is needed
+    setSearchTerm,
+    fetchData, // قد تحتاجها للإنعاش اليدوي
+    fetchStats,
     handleMarkComplete,
     bulkProcessingLoading,
     bulkProcessResult,
     bulkResultModalOpen,
-    handleBulkProcess: handleBulkProcess, // Renamed from handleBulkProcessPending
+    handleBulkProcess,
     handleCloseBulkResultModal,
   };
 }
