@@ -3,7 +3,7 @@ import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
 
-const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
+const API_BASE_URL = "http://localhost:5000";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
@@ -132,18 +132,6 @@ export const updateSubscriptionPlan = async (planId, data) => {
   }
 };
 
-// حذف خطة اشتراك
-export const deleteSubscriptionPlan = async (planId) => {
-  try {
-    const response = await axios.delete(`${API_BASE_URL}/api/admin/subscription-plans/${planId}`, {
-      headers: getAuthHeaders(),
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
 /**
  * 1. جلب بيانات الاشتراكات مع دعم الفلاتر والتجزئة
  * يمكنك تمرير كائن من الفلاتر مثل:
@@ -264,33 +252,92 @@ export const removeAuthToken = () => {
 
 /**
  * دوال إدارة المستخدمين:
- * يتم استخدام apiClient بحيث تمر كل الطلبات عبر الـ interceptors.
  */
-export const getUserspanel = () => {
-  return axios.get(`${API_BASE_URL}/api/admin/users_panel`, {
-    headers: getAuthHeaders(),
+export const getPanelUsers = () => {
+  return apiClient.get("/api/admin/users_panel");
+};
+
+/**
+ * حذف مستخدم بناءً على ID.
+ * @param {number} userId - معرف المستخدم المراد حذفه.
+ */
+export const deletePanelUser = (userId) => {
+  return apiClient.delete(`/api/admin/users/${userId}`);
+};
+
+export const deleteSubscriptionPlan = (planId) => {
+  return apiClient.delete(`/api/admin/subscription-plans/${planId}`);
+};
+
+/**
+ * إنشاء مستخدم جديد.
+ * @param {string} email
+ * @param {string} displayName
+ * @param {number} roleId - معرف الدور
+ */
+export const createPanelUser = (email, displayName, roleId) => {
+  return apiClient.post("/api/admin/users_panel", {
+    email,
+    display_name: displayName,
+    role_id: parseInt(roleId, 10), // تأكد من أن roleId رقم
   });
 };
 
-export const deleteUser = (email) => {
-  return axios.delete(
-    `${API_BASE_URL}/api/admin/remove_user`,
-    { data: { email } },
-    {
-      headers: getAuthHeaders(),
-    }
-  );
+/**
+ * تحديث دور مستخدم محدد.
+ * @param {number} userId - معرف المستخدم المراد تحديث دوره.
+ * @param {number} roleId - معرف الدور الجديد.
+ */
+export const updateUserRole = (userId, roleId) => {
+  return apiClient.put(`/api/permissions/users/${userId}/role`, {
+    role_id: parseInt(roleId, 10), // تأكد من أن roleId رقم
+  });
 };
 
-export const addUser = (email, displayName, role) => {
-  const endpoint = role === "owner" ? "add_owner" : "add_admin";
-  return axios.post(
-    `${API_BASE_URL}/api/admin/${endpoint}`,
-    { email, display_name: displayName },
-    {
-      headers: getAuthHeaders(),
-    }
-  );
+/**
+ * دوال إدارة الأدوار والصلاحيات
+ */
+export const getRoles = () => {
+  return apiClient.get("/api/permissions/roles");
+};
+
+export const getPermissions = () => {
+  return apiClient.get("/api/permissions/permissions");
+};
+
+export const getRolePermissions = (roleId) => {
+  return apiClient.get(`/api/permissions/roles/${roleId}/permissions`);
+};
+
+export const updateRolePermissions = (roleId, permissionIds) => {
+  return apiClient.put(`/api/permissions/roles/${roleId}/permissions`, {
+    permission_ids: permissionIds.map((id) => parseInt(id, 10)), // تأكد أن كل ID رقم
+  });
+};
+
+export const createRole = (name, description, permissionIds) => {
+  return apiClient.post("/api/permissions/roles", {
+    name,
+    description,
+    permission_ids: permissionIds.map((id) => parseInt(id, 10)), // تأكد أن كل ID رقم
+  });
+};
+
+// (اختياري) حذف دور - ستحتاج إلى endpoint في الخلفية
+// export const deleteRole = (roleId) => {
+//   return apiClient.delete(`/api/permissions/roles/${roleId}`);
+// };
+
+/**
+ * دوال صلاحيات المستخدم الحالي وسجل التدقيق
+ */
+export const getMyPermissions = () => {
+  return apiClient.get("/api/permissions/my-permissions");
+};
+
+export const getAuditLogs = (page = 1, limit = 25) => {
+  // حد افتراضي أصغر للعرض الأولي
+  return apiClient.get(`/api/permissions/audit-logs?page=${page}&limit=${limit}`);
 };
 
 export const getUsers = async (filters = {}) => {
@@ -392,8 +439,8 @@ export const updateWalletAddress = (walletData) => {
   return axios.post(
     `${API_BASE_URL}/api/admin/wallet`,
     {
-      wallet_address: walletData.wallet_address, // تم التصحيح هنا
-      api_key: walletData.api_key, // تم التصحيح هنا
+      wallet_address: walletData.wallet_address,
+      api_key: walletData.api_key,
     },
     {
       headers: getAuthHeaders(),
@@ -693,3 +740,73 @@ export const exportUsersToExcel = async (exportOptions) => {
     throw error;
   }
 };
+
+// الحصول على الإحصائيات الأساسية
+export const getDashboardStats = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard/stats`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    throw error;
+  }
+};
+
+// الحصول على بيانات مخطط الإيرادات
+export const getRevenueChart = async (period = "7days") => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard/revenue_chart`, {
+      headers: getAuthHeaders(),
+      params: { period },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching revenue chart:", error);
+    throw error;
+  }
+};
+
+// الحصول على بيانات مخطط الاشتراكات
+export const getSubscriptionsChart = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard/subscriptions_chart`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching subscriptions chart:", error);
+    throw error;
+  }
+};
+
+// الحصول على النشاطات الحديثة
+export const getRecentActivities = async (limit = 10) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard/recent_activities`, {
+      headers: getAuthHeaders(),
+      params: { limit },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching recent activities:", error);
+    throw error;
+  }
+};
+
+// الحصول على المدفوعات الحديثة
+export const getRecentPayments = async (limit = 10) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard/recent_payments`, {
+      headers: getAuthHeaders(),
+      params: { limit },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching recent payments:", error);
+    throw error;
+  }
+};
+
+export default apiClient;

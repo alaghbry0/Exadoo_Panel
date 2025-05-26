@@ -7,32 +7,32 @@ import DialogActions from "@mui/material/DialogActions";
 import CssBaseline from "@mui/material/CssBaseline";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import IconButton from "@mui/material/IconButton"; // لإضافة زر الحذف
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline"; // أيقونة لإضافة قناة
-import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline"; // أيقونة لحذف قناة
+import IconButton from "@mui/material/IconButton";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useTheme } from "@mui/material/styles";
 import MDBox from "components/MDBox";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-import { createSubscriptionType } from "services/api"; // تأكد من أن هذه الدالة محدثة في api.js
-import FeaturesInput from "./FeaturesInput";
-import { Grid, Divider, Tooltip } from "@mui/material"; // للمساعدة في التنسيق
+import { createSubscriptionType } from "services/api";
+import FeaturesInput from "./FeaturesInput"; // افترض أن هذا هو المكون المستخدم للميزات
+import { Grid, Divider, Tooltip } from "@mui/material";
 
 function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
   const [name, setName] = useState("");
-  const [mainChannelId, setMainChannelId] = useState(""); // تم تغيير الاسم
-  const [mainChannelName, setMainChannelName] = useState(""); // اسم القناة الرئيسية
+  const [mainChannelId, setMainChannelId] = useState("");
+  const [mainChannelName, setMainChannelName] = useState("");
   const [secondaryChannels, setSecondaryChannels] = useState([
     { channel_id: "", channel_name: "" },
-  ]); // قائمة القنوات الفرعية
-  const [features, setFeatures] = useState([]); // تأكد من القيمة الافتراضية المناسبة
+  ]);
+  const [features, setFeatures] = useState([]);
+  const [termsAndConditions, setTermsAndConditions] = useState([]); // <-- حالة جديدة
   const [isActive, setIsActive] = useState(true);
   const theme = useTheme();
 
   const [nameError, setNameError] = useState(false);
   const [mainChannelIdError, setMainChannelIdError] = useState(false);
-  // يمكنك إضافة حالات خطأ للقنوات الفرعية إذا أردت التحقق المفصل
 
   const resetForm = () => {
     setName("");
@@ -40,6 +40,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
     setMainChannelName("");
     setSecondaryChannels([{ channel_id: "", channel_name: "" }]);
     setFeatures([]);
+    setTermsAndConditions([]); // <-- إعادة تعيين
     setIsActive(true);
     setNameError(false);
     setMainChannelIdError(false);
@@ -53,7 +54,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
     const newChannels = secondaryChannels.filter((_, i) => i !== index);
     setSecondaryChannels(
       newChannels.length > 0 ? newChannels : [{ channel_id: "", channel_name: "" }]
-    ); // أبقِ على حقل واحد فارغ إذا حذفت الكل
+    );
   };
 
   const handleSecondaryChannelChange = (index, field, value) => {
@@ -71,23 +72,17 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
       setNameError(true);
       isValid = false;
     }
-    if (!mainChannelId.trim()) {
+    if (!mainChannelId.trim() || isNaN(parseInt(mainChannelId.trim(), 10))) {
       setMainChannelIdError(true);
       isValid = false;
     }
-    // التحقق من أن mainChannelId هو رقم
-    if (mainChannelId.trim() && isNaN(parseInt(mainChannelId, 10))) {
-      setMainChannelIdError(true); // يمكنك إضافة رسالة خطأ محددة
-      isValid = false;
-    }
 
-    // التحقق من القنوات الفرعية (اختياري، لكن إذا تم ملؤها يجب أن تكون صحيحة)
     const finalSecondaryChannels = secondaryChannels
       .map((ch) => ({
         ...ch,
         channel_id: ch.channel_id ? parseInt(ch.channel_id.toString().trim(), 10) : null,
       }))
-      .filter((ch) => ch.channel_id !== null && !isNaN(ch.channel_id)); // تجاهل الحقول الفارغة أو غير الرقمية
+      .filter((ch) => ch.channel_id !== null && !isNaN(ch.channel_id));
 
     for (const ch of finalSecondaryChannels) {
       if (ch.channel_id === parseInt(mainChannelId, 10)) {
@@ -102,24 +97,23 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
     const data = {
       name: name.trim(),
       main_channel_id: parseInt(mainChannelId.trim(), 10),
-      main_channel_name: mainChannelName.trim() || null, // أرسل null إذا كان فارغًا
+      main_channel_name: mainChannelName.trim() || null,
       secondary_channels: finalSecondaryChannels.map((ch) => ({
         channel_id: ch.channel_id,
-        channel_name: ch.channel_name?.trim() || null, // أرسل null إذا كان الاسم فارغًا
+        channel_name: ch.channel_name?.trim() || null,
       })),
-      features: features || [], // تأكد أن features هي مصفوفة
+      features: features || [],
+      terms_and_conditions: termsAndConditions || [], // <-- إضافة جديدة
       is_active: isActive,
-      // أضف بقية الحقول مثل description, image_url, usp إذا كانت تُدار هنا
     };
 
     try {
-      const newType = await createSubscriptionType(data); // تأكد أن هذه الدالة تتوقع البنية الجديدة
-      onTypeAdded(newType); // newType يجب أن يحتوي على linked_channels من الـ backend
+      const newType = await createSubscriptionType(data);
+      onTypeAdded(newType);
       resetForm();
       onClose();
     } catch (error) {
       console.error("Error creating subscription type", error);
-      // يمكنك عرض رسالة خطأ أكثر تحديدًا من الـ backend إذا أمكن
       alert(
         error.response?.data?.error ||
           "Failed to add new subscription type. Please check the form and try again."
@@ -129,8 +123,6 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      {" "}
-      {/* زيادة العرض */}
       <DialogTitle sx={{ color: theme.palette.text.primary, pb: 1 }}>
         <MDTypography variant="h5" fontWeight="bold">
           Add New Subscription Type
@@ -227,7 +219,6 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
                       handleSecondaryChannelChange(index, "channel_id", e.target.value)
                     }
                     margin="dense"
-                    // يمكنك إضافة error و helperText هنا إذا أردت تحققًا مفصلاً
                   />
                 </Grid>
                 <Grid item xs={12} sm={5}>
@@ -247,7 +238,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
                   sm={2}
                   sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {secondaryChannels.length > 1 && ( // لا تسمح بحذف آخر حقل، أو عدله ليصبح حقلاً واحداً فارغاً
+                  {secondaryChannels.length > 1 && (
                     <Tooltip title="Remove Channel">
                       <IconButton
                         onClick={() => handleRemoveSecondaryChannel(index)}
@@ -270,9 +261,30 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
               <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mb: 0.5 }}>
                 Features
               </MDTypography>
-              <FeaturesInput value={features} onChange={setFeatures} />
+              <FeaturesInput
+                value={features}
+                onChange={setFeatures}
+                label="Feature"
+                placeholder="Enter a feature"
+              />
             </Grid>
-            {/* أضف هنا حقول description, image_url, usp إذا كنت تريد إدارتها */}
+
+            {/* -- قسم الشروط والأحكام الجديد -- */}
+            <Grid item xs={12} sx={{ mt: 2 }}>
+              <Divider />
+            </Grid>
+            <Grid item xs={12} sx={{ mt: 1 }}>
+              <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mb: 0.5 }}>
+                Terms & Conditions
+              </MDTypography>
+              <FeaturesInput
+                value={termsAndConditions}
+                onChange={setTermsAndConditions}
+                label="Term"
+                placeholder="Enter a term or condition"
+              />
+            </Grid>
+            {/* -- نهاية قسم الشروط والأحكام الجديد -- */}
           </Grid>
         </MDBox>
       </DialogContent>
@@ -280,11 +292,7 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
         <MDButton onClick={onClose} color="secondary" variant="text">
           Cancel
         </MDButton>
-        <MDButton
-          onClick={handleSubmit}
-          variant="gradient"
-          color="info" // أو primary
-        >
+        <MDButton onClick={handleSubmit} variant="gradient" color="info">
           Add Type
         </MDButton>
       </DialogActions>
