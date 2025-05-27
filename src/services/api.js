@@ -332,7 +332,9 @@ export const createRole = (name, description, permissionIds) => {
  * دوال صلاحيات المستخدم الحالي وسجل التدقيق
  */
 export const getMyPermissions = () => {
-  return apiClient.get("/api/permissions/my-permissions");
+  return axios.get(`${API_BASE_URL}/api/permissions/my-permissions`, {
+    headers: getAuthHeaders(),
+  });
 };
 
 export const getAuditLogs = (page = 1, limit = 25) => {
@@ -397,7 +399,6 @@ export const refreshAuthToken = async () => {
  */
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // تم الإضافة: للسماح بإرسال واستقبال ملفات تعريف الارتباط
 });
 
 // Request interceptor: يضيف Authorization header قبل إرسال الطلب
