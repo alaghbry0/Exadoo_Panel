@@ -3,12 +3,11 @@ import axios from "axios";
 console.log(process.env.NEXT_PUBLIC_BACK_URL);
 // تأكد من إعداد عنوان الـ API الرئيسي في ملف .env مثلاً
 
-const API_BASE_URL = "https://exadoo-rxr9.onrender.com";
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token") || process.env.REACT_APP_ADMIN_TOKEN;
   const authHeader = `Bearer ${token}`;
-  console.log("Full Authorization Header:", authHeader); // ✅ تسجيل الترويسة بالكامل
   return {
     Authorization: authHeader,
   };
@@ -16,19 +15,37 @@ const getAuthHeaders = () => {
 
 /** إدارة أنواع الاشتراكات (subscription_types) **/
 
-// جلب قائمة بأنواع الاشتراكات
-export const getSubscriptionTypes = async () => {
+export const getSubscriptionData = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/admin/subscription-types`, {
+    // هذه الدالة ستجلب المجموعات، وأنواع الاشتراكات، وخططها دفعة واحدة
+    const response = await axios.get(`${API_BASE_URL}/api/admin/subscription-data`, {
       headers: getAuthHeaders(),
     });
     return response.data;
   } catch (error) {
+    console.error("API Error - getSubscriptionData:", error.response?.data || error.message);
     throw error;
   }
 };
 
-// جلب تفاصيل نوع اشتراك معين
+export const getSubscriptionTypes = async (groupId = null) => {
+  // إضافة فلتر اختياري
+  try {
+    const params = {};
+    if (groupId) {
+      params.group_id = groupId;
+    }
+    const response = await axios.get(`${API_BASE_URL}/api/admin/subscription-types`, {
+      headers: getAuthHeaders(),
+      params: params, // إضافة البارامترات هنا
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error - getSubscriptionTypes:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export const getSubscriptionType = async (typeId) => {
   try {
     const response = await axios.get(`${API_BASE_URL}/api/admin/subscription-types/${typeId}`, {
@@ -36,11 +53,11 @@ export const getSubscriptionType = async (typeId) => {
     });
     return response.data;
   } catch (error) {
+    console.error("API Error - getSubscriptionType:", error.response?.data || error.message);
     throw error;
   }
 };
 
-// انشاء اشتراك جديد
 export const createSubscriptionType = async (data) => {
   try {
     const response = await axios.post(`${API_BASE_URL}/api/admin/subscription-types`, data, {
@@ -48,11 +65,11 @@ export const createSubscriptionType = async (data) => {
     });
     return response.data;
   } catch (error) {
+    console.error("API Error - createSubscriptionType:", error.response?.data || error.message);
     throw error;
   }
 };
 
-// تعديل نوع اشتراك موجود
 export const updateSubscriptionType = async (typeId, data) => {
   try {
     const response = await axios.put(
@@ -62,6 +79,101 @@ export const updateSubscriptionType = async (typeId, data) => {
     );
     return response.data;
   } catch (error) {
+    console.error("API Error - updateSubscriptionType:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// === APIs الخاصة بالمجموعات ===
+
+// جلب جميع مجموعات الاشتراكات
+export const getGroupedSubscriptionTypes = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/subscription-types/grouped`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error(
+      "API Error - getGroupedSubscriptionTypes:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+export const getImageKitSignature = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/imagekit-signature`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data; // يجب أن يحتوي على token, expire, signature
+  } catch (error) {
+    console.error("API Error - getImageKitSignature:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// --- Subscription Groups ---
+export const getSubscriptionGroups = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/subscription-groups`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data; // يفترض أن تحتوي على subscription_types_count
+  } catch (error) {
+    console.error("API Error - getSubscriptionGroups:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const getSubscriptionGroup = async (groupId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/subscription-groups/${groupId}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data; // يفترض أن تحتوي على تفاصيل المجموعة وأنواع الاشتراكات داخلها
+  } catch (error) {
+    console.error("API Error - getSubscriptionGroup:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const createSubscriptionGroup = async (data) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/admin/subscription-groups`, data, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error - createSubscriptionGroup:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const updateSubscriptionGroup = async (groupId, data) => {
+  try {
+    const response = await axios.put(
+      `${API_BASE_URL}/api/admin/subscription-groups/${groupId}`,
+      data,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error - updateSubscriptionGroup:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const deleteSubscriptionGroup = async (groupId) => {
+  try {
+    const response = await axios.delete(
+      `${API_BASE_URL}/api/admin/subscription-groups/${groupId}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data; // يجب أن يكون رسالة نجاح أو خطأ
+  } catch (error) {
+    console.error("API Error - deleteSubscriptionGroup:", error.response?.data || error.message);
     throw error;
   }
 };

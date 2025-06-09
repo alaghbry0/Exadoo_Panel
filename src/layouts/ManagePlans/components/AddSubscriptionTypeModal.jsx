@@ -1,25 +1,35 @@
 // src/layouts/ManagePlans/components/AddSubscriptionTypeModal.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import CssBaseline from "@mui/material/CssBaseline";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import IconButton from "@mui/material/IconButton";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
-import { useTheme } from "@mui/material/styles";
 import MDBox from "components/MDBox";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-import { createSubscriptionType } from "services/api";
-import FeaturesInput from "./FeaturesInput"; // افترض أن هذا هو المكون المستخدم للميزات
-import { Grid, Divider, Tooltip } from "@mui/material";
+import {
+  Grid,
+  Divider,
+  Tooltip,
+  CircularProgress,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+} from "@mui/material";
+import { createSubscriptionType, getSubscriptionGroups } from "services/api";
+import FeaturesInput from "./FeaturesInput";
+import { useSnackbar } from "notistack";
 
 function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
+  const { enqueueSnackbar } = useSnackbar();
+
   const [name, setName] = useState("");
   const [mainChannelId, setMainChannelId] = useState("");
   const [mainChannelName, setMainChannelName] = useState("");
@@ -27,30 +37,71 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
     { channel_id: "", channel_name: "" },
   ]);
   const [features, setFeatures] = useState([]);
-  const [termsAndConditions, setTermsAndConditions] = useState([]); // <-- حالة جديدة
+  const [termsAndConditions, setTermsAndConditions] = useState([]);
   const [isActive, setIsActive] = useState(true);
-  const theme = useTheme();
+
+  const [groupId, setGroupId] = useState("");
+  const [sortOrder, setSortOrder] = useState(0);
+  const [isRecommended, setIsRecommended] = useState(false);
+  const [usp, setUsp] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   const [nameError, setNameError] = useState(false);
   const [mainChannelIdError, setMainChannelIdError] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const resetForm = () => {
+  const [availableGroups, setAvailableGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  const resetForm = useCallback(() => {
     setName("");
     setMainChannelId("");
     setMainChannelName("");
     setSecondaryChannels([{ channel_id: "", channel_name: "" }]);
     setFeatures([]);
-    setTermsAndConditions([]); // <-- إعادة تعيين
+    setTermsAndConditions([]);
     setIsActive(true);
+    setGroupId("");
+    setSortOrder(0);
+    setIsRecommended(false);
+    setUsp("");
+    setImageUrl("");
     setNameError(false);
     setMainChannelIdError(false);
-  };
+    setIsSaving(false);
+  }, []);
+
+  const fetchGroups = useCallback(async () => {
+    if (!open) return;
+    setLoadingGroups(true);
+    try {
+      const groups = await getSubscriptionGroups();
+      setAvailableGroups(groups || []);
+    } catch (error) {
+      console.error("Error fetching groups for modal:", error);
+      enqueueSnackbar("Failed to load subscription groups.", { variant: "error" });
+      setAvailableGroups([]);
+    } finally {
+      setLoadingGroups(false);
+    }
+  }, [open, enqueueSnackbar]);
+
+  useEffect(() => {
+    if (open) {
+      resetForm();
+      fetchGroups();
+    } else {
+      setAvailableGroups([]);
+    }
+  }, [open, resetForm, fetchGroups]);
 
   const handleAddSecondaryChannel = () => {
-    setSecondaryChannels([...secondaryChannels, { channel_id: "", channel_name: "" }]);
+    if (isSaving) return;
+    setSecondaryChannels((prev) => [...prev, { channel_id: "", channel_name: "" }]);
   };
 
   const handleRemoveSecondaryChannel = (index) => {
+    if (isSaving) return;
     const newChannels = secondaryChannels.filter((_, i) => i !== index);
     setSecondaryChannels(
       newChannels.length > 0 ? newChannels : [{ channel_id: "", channel_name: "" }]
@@ -58,35 +109,37 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
   };
 
   const handleSecondaryChannelChange = (index, field, value) => {
+    if (isSaving) return;
     const newChannels = [...secondaryChannels];
     newChannels[index][field] = value;
     setSecondaryChannels(newChannels);
   };
 
   const handleSubmit = async () => {
-    setNameError(false);
-    setMainChannelIdError(false);
-
+    if (isSaving) return;
     let isValid = true;
-    if (!name.trim()) {
-      setNameError(true);
-      isValid = false;
-    }
-    if (!mainChannelId.trim() || isNaN(parseInt(mainChannelId.trim(), 10))) {
-      setMainChannelIdError(true);
+    setNameError(!name.trim());
+    setMainChannelIdError(!mainChannelId.trim() || isNaN(parseInt(mainChannelId.trim(), 10)));
+
+    if (!name.trim() || !mainChannelId.trim() || isNaN(parseInt(mainChannelId.trim(), 10))) {
       isValid = false;
     }
 
+    const parsedMainChannelId = parseInt(mainChannelId.trim(), 10);
     const finalSecondaryChannels = secondaryChannels
       .map((ch) => ({
-        ...ch,
-        channel_id: ch.channel_id ? parseInt(ch.channel_id.toString().trim(), 10) : null,
+        channel_id: ch.channel_id?.toString().trim()
+          ? parseInt(ch.channel_id.toString().trim(), 10)
+          : null,
+        channel_name: ch.channel_name?.trim() || null,
       }))
       .filter((ch) => ch.channel_id !== null && !isNaN(ch.channel_id));
 
     for (const ch of finalSecondaryChannels) {
-      if (ch.channel_id === parseInt(mainChannelId, 10)) {
-        alert("Secondary channel ID cannot be the same as the Main Channel ID.");
+      if (ch.channel_id === parsedMainChannelId) {
+        enqueueSnackbar("Secondary channel ID cannot be the same as the Main Channel ID.", {
+          variant: "error",
+        });
         isValid = false;
         break;
       }
@@ -94,47 +147,62 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
 
     if (!isValid) return;
 
-    const data = {
+    const dataToCreate = {
       name: name.trim(),
-      main_channel_id: parseInt(mainChannelId.trim(), 10),
-      main_channel_name: mainChannelName.trim() || null,
-      secondary_channels: finalSecondaryChannels.map((ch) => ({
-        channel_id: ch.channel_id,
-        channel_name: ch.channel_name?.trim() || null,
-      })),
-      features: features || [],
-      terms_and_conditions: termsAndConditions || [], // <-- إضافة جديدة
+      main_channel_id: parsedMainChannelId,
+      main_channel_name: mainChannelName.trim() || `Main Channel for ${name.trim()}`,
+      secondary_channels: finalSecondaryChannels,
+      features: features.filter((f) => f.trim() !== ""),
+      terms_and_conditions: termsAndConditions.filter((t) => t.trim() !== ""),
       is_active: isActive,
+      group_id: groupId ? parseInt(groupId, 10) : null,
+      sort_order: parseInt(sortOrder, 10) || 0,
+      is_recommended: isRecommended,
+      usp: usp.trim() || null,
+      image_url: imageUrl.trim() || null,
     };
 
+    setIsSaving(true);
     try {
-      const newType = await createSubscriptionType(data);
+      const newType = await createSubscriptionType(dataToCreate);
+      enqueueSnackbar("Subscription type created successfully!", { variant: "success" });
       onTypeAdded(newType);
-      resetForm();
       onClose();
     } catch (error) {
-      console.error("Error creating subscription type", error);
-      alert(
-        error.response?.data?.error ||
-          "Failed to add new subscription type. Please check the form and try again."
-      );
+      console.error("Error creating subscription type:", error);
+      enqueueSnackbar(error.response?.data?.error || "Failed to create subscription type.", {
+        variant: "error",
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle sx={{ color: theme.palette.text.primary, pb: 1 }}>
+    <Dialog
+      open={open}
+      onClose={isSaving ? () => {} : onClose}
+      fullWidth
+      maxWidth="md"
+      PaperProps={{ sx: { borderRadius: "12px" } }}
+    >
+      <DialogTitle sx={{ pb: 1, borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}>
         <MDTypography variant="h5" fontWeight="bold">
           Add New Subscription Type
         </MDTypography>
       </DialogTitle>
-      <DialogContent
-        sx={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary }}
-      >
-        <CssBaseline />
+      <DialogContent sx={{ pt: 2 }}>
         <MDBox component="form" noValidate sx={{ mt: 1 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+          <Grid container spacing={2.5}>
+            {" "}
+            {/* spacing={3} قد يكون أفضل إذا كان مزدحماً */}
+            {/* --- Section: Basic Information --- */}
+            <Grid item xs={12}>
+              <MDTypography variant="subtitle1" fontWeight="medium" sx={{ mb: 1.5 }}>
+                Basic Information
+              </MDTypography>
+            </Grid>
+            <Grid item xs={12} sm={7}>
               <MDInput
                 label="Type Name *"
                 fullWidth
@@ -143,25 +211,122 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
                 error={nameError}
                 helperText={nameError ? "Type Name is required" : ""}
                 onChange={(e) => setName(e.target.value)}
-                margin="dense"
+                disabled={isSaving}
+                variant="outlined"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid
+              item
+              xs={6}
+              sm={2.5}
+              sx={{ display: "flex", alignItems: "center", pt: { xs: 0, sm: "4px" } }}
+            >
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={isActive}
                     onChange={(e) => setIsActive(e.target.checked)}
                     color="primary"
+                    disabled={isSaving}
                   />
                 }
                 label={<MDTypography variant="body2">Active</MDTypography>}
-                sx={{ mt: 1.5 }}
+                sx={{ ml: -1 }}
               />
             </Grid>
-
+            <Grid
+              item
+              xs={6}
+              sm={2.5}
+              sx={{ display: "flex", alignItems: "center", pt: { xs: 0, sm: "4px" } }}
+            >
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={isRecommended}
+                    onChange={(e) => setIsRecommended(e.target.checked)}
+                    color="primary"
+                    disabled={isSaving}
+                  />
+                }
+                label={<MDTypography variant="body2">Recommended</MDTypography>}
+                sx={{ ml: -1 }}
+              />
+            </Grid>
+            {/* --- Section: Organization & Display --- */}
+            <Grid item xs={12} sx={{ mt: 2 }}>
+              <MDTypography variant="subtitle1" fontWeight="medium" sx={{ mb: 1.5 }}>
+                Organization & Display
+              </MDTypography>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth variant="outlined" disabled={isSaving || loadingGroups}>
+                <InputLabel id="group-select-label-add">Assign to Group</InputLabel>
+                <Select
+                  labelId="group-select-label-add"
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                  label="Assign to Group"
+                >
+                  <MenuItem value="">
+                    <em>None (Ungrouped)</em>
+                  </MenuItem>
+                  {availableGroups.map((group) => (
+                    <MenuItem key={group.id} value={group.id.toString()}>
+                      {group.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {loadingGroups && (
+                  <CircularProgress
+                    size={20}
+                    sx={{ position: "absolute", right: 40, top: "50%", marginTop: "-10px" }}
+                  />
+                )}
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <MDInput
+                label="Sort Order (in group)"
+                type="number"
+                fullWidth
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                disabled={isSaving}
+                variant="outlined"
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <MDInput
+                label="Unique Selling Proposition (USP)"
+                fullWidth
+                value={usp}
+                onChange={(e) => setUsp(e.target.value)}
+                disabled={isSaving}
+                variant="outlined"
+                placeholder="e.g. Best value for families"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <MDInput
+                label="Image URL"
+                fullWidth
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                disabled={isSaving}
+                variant="outlined"
+                placeholder="https://example.com/image.png"
+              />
+            </Grid>
+            {/* --- Section: Channel Configuration --- */}
+            <Grid item xs={12} sx={{ mt: 2 }}>
+              <MDTypography variant="subtitle1" fontWeight="medium" sx={{ mb: 1 }}>
+                Channel Configuration
+              </MDTypography>
+            </Grid>
             <Grid item xs={12}>
-              <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mb: 0.5 }}>
+              <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mb: -0.5 }}>
                 Main Channel
               </MDTypography>
             </Grid>
@@ -173,91 +338,111 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
                 required
                 value={mainChannelId}
                 error={mainChannelIdError}
-                helperText={
-                  mainChannelIdError ? "Main Channel ID is required and must be a number" : ""
-                }
+                helperText={mainChannelIdError ? "Main Channel ID is required" : ""}
                 onChange={(e) => setMainChannelId(e.target.value)}
-                margin="dense"
+                disabled={isSaving}
+                variant="outlined"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <MDInput
-                label="Main Channel Name (Optional)"
+                label="Main Channel Name"
                 fullWidth
                 value={mainChannelName}
                 onChange={(e) => setMainChannelName(e.target.value)}
-                margin="dense"
+                disabled={isSaving}
+                variant="outlined"
+                placeholder={`Defaults to "Main Channel for {Name}"`}
               />
             </Grid>
-
-            <Grid item xs={12} sx={{ mt: 2 }}>
-              <Divider />
+            <Grid item xs={12} sx={{ mt: 1.5 }}>
+              <Divider light={false} />
             </Grid>
-
-            <Grid item xs={12} sx={{ mt: 1 }}>
-              <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+            <Grid item xs={12} sx={{ mt: 0.5 }}>
+              <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
                 <MDTypography variant="subtitle2" fontWeight="medium">
-                  Secondary Channels (Optional)
+                  Secondary Channels
                 </MDTypography>
                 <Tooltip title="Add Secondary Channel">
-                  <IconButton onClick={handleAddSecondaryChannel} color="primary" size="small">
-                    <AddCircleOutlineIcon />
-                  </IconButton>
+                  <span>
+                    <IconButton
+                      onClick={handleAddSecondaryChannel}
+                      color="primary"
+                      size="small"
+                      disabled={isSaving}
+                    >
+                      <AddCircleOutlineIcon />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </MDBox>
             </Grid>
-
             {secondaryChannels.map((channel, index) => (
-              <React.Fragment key={index}>
-                <Grid item xs={12} sm={5}>
+              <React.Fragment key={`sec-ch-add-${index}`}>
+                <Grid item xs={12} sm={5.5}>
                   <MDInput
-                    label={`Secondary Channel ID ${index + 1}`}
+                    label={`Sec. Channel ID ${index + 1}`}
                     type="number"
                     fullWidth
                     value={channel.channel_id}
                     onChange={(e) =>
                       handleSecondaryChannelChange(index, "channel_id", e.target.value)
                     }
-                    margin="dense"
+                    disabled={isSaving}
+                    variant="outlined"
+                    size="small"
                   />
                 </Grid>
-                <Grid item xs={12} sm={5}>
+                <Grid item xs={12} sm={5.5}>
                   <MDInput
-                    label={`Secondary Channel Name ${index + 1} (Optional)`}
+                    label={`Sec. Channel Name ${index + 1}`}
                     fullWidth
                     value={channel.channel_name}
                     onChange={(e) =>
                       handleSecondaryChannelChange(index, "channel_name", e.target.value)
                     }
-                    margin="dense"
+                    disabled={isSaving}
+                    variant="outlined"
+                    size="small"
                   />
                 </Grid>
                 <Grid
                   item
                   xs={12}
-                  sm={2}
-                  sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+                  sm={1}
+                  sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}
                 >
-                  {secondaryChannels.length > 1 && (
-                    <Tooltip title="Remove Channel">
+                  <Tooltip title="Remove Channel">
+                    <span>
                       <IconButton
                         onClick={() => handleRemoveSecondaryChannel(index)}
                         color="error"
                         size="small"
+                        disabled={
+                          (secondaryChannels.length === 1 &&
+                            !channel.channel_id &&
+                            !channel.channel_name) ||
+                          isSaving
+                        }
                       >
                         <RemoveCircleOutlineIcon />
                       </IconButton>
-                    </Tooltip>
-                  )}
+                    </span>
+                  </Tooltip>
                 </Grid>
               </React.Fragment>
             ))}
-
-            <Grid item xs={12} sx={{ mt: 2 }}>
-              <Divider />
+            {/* لا يوجد خيار إرسال الدعوات هنا في نافذة الإضافة */}
+            {/* --- Section: Additional Details --- */}
+            <Grid item xs={12} sx={{ mt: 1.5 }}>
+              <Divider light={false} />
             </Grid>
-
-            <Grid item xs={12} sx={{ mt: 1 }}>
+            <Grid item xs={12} sx={{ mt: 0.5 }}>
+              <MDTypography variant="subtitle1" fontWeight="medium" sx={{ mb: 1.5 }}>
+                Additional Details
+              </MDTypography>
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mb: 0.5 }}>
                 Features
               </MDTypography>
@@ -266,14 +451,11 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
                 onChange={setFeatures}
                 label="Feature"
                 placeholder="Enter a feature"
+                variant="outlined"
+                disabled={isSaving}
               />
             </Grid>
-
-            {/* -- قسم الشروط والأحكام الجديد -- */}
-            <Grid item xs={12} sx={{ mt: 2 }}>
-              <Divider />
-            </Grid>
-            <Grid item xs={12} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
               <MDTypography variant="subtitle2" fontWeight="medium" sx={{ mb: 0.5 }}>
                 Terms & Conditions
               </MDTypography>
@@ -282,18 +464,32 @@ function AddSubscriptionTypeModal({ open, onClose, onTypeAdded }) {
                 onChange={setTermsAndConditions}
                 label="Term"
                 placeholder="Enter a term or condition"
+                variant="outlined"
+                disabled={isSaving}
               />
             </Grid>
-            {/* -- نهاية قسم الشروط والأحكام الجديد -- */}
           </Grid>
         </MDBox>
       </DialogContent>
-      <DialogActions sx={{ backgroundColor: theme.palette.background.paper, px: 3, pb: 2 }}>
-        <MDButton onClick={onClose} color="secondary" variant="text">
+      <DialogActions
+        sx={{ px: 3, pb: 2, pt: 2, borderTop: (theme) => `1px solid ${theme.palette.divider}` }}
+      >
+        <MDButton
+          onClick={isSaving ? () => {} : onClose}
+          color="secondary"
+          variant="text"
+          disabled={isSaving}
+        >
           Cancel
         </MDButton>
-        <MDButton onClick={handleSubmit} variant="gradient" color="info">
-          Add Type
+        <MDButton
+          onClick={handleSubmit}
+          color="info"
+          variant="gradient"
+          disabled={isSaving || loadingGroups}
+          startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : null}
+        >
+          {isSaving ? "Creating..." : "Add Type"}
         </MDButton>
       </DialogActions>
     </Dialog>
