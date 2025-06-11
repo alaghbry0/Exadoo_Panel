@@ -1,4 +1,3 @@
-// src/layouts/ManagePlans/components/AddGroupModal.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
@@ -9,18 +8,18 @@ import {
   Checkbox,
   FormControlLabel,
   CircularProgress,
+  Switch, // لاستخدام Switch
 } from "@mui/material";
 import MDBox from "components/MDBox";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-import { createSubscriptionGroup } from "services/api"; // فقط create
+import { createSubscriptionGroup } from "services/api";
 import ColorPicker from "./ColorPicker";
 import IconPicker from "./IconPicker";
 import { useSnackbar } from "notistack";
 
 function AddGroupModal({ open, onClose, onGroupAdded }) {
-  // تم تغيير onGroupUpserted إلى onGroupAdded
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -28,6 +27,7 @@ function AddGroupModal({ open, onClose, onGroupAdded }) {
   const [icon, setIcon] = useState("category");
   const [isActive, setIsActive] = useState(true);
   const [sortOrder, setSortOrder] = useState(0);
+  const [displayAsSingleCard, setDisplayAsSingleCard] = useState(false); // <--- الحالة الجديدة
 
   const [nameError, setNameError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,6 +41,7 @@ function AddGroupModal({ open, onClose, onGroupAdded }) {
     setIcon("category");
     setIsActive(true);
     setSortOrder(0);
+    setDisplayAsSingleCard(false); // <--- إعادة تعيين الحالة الجديدة
     setNameError(false);
     setIsSaving(false);
   }, []);
@@ -67,6 +68,7 @@ function AddGroupModal({ open, onClose, onGroupAdded }) {
       icon: icon.trim() || "category",
       is_active: isActive,
       sort_order: parseInt(String(sortOrder), 10) || 0,
+      display_as_single_card: displayAsSingleCard, // <--- إرسال القيمة
     };
 
     setIsSaving(true);
@@ -182,6 +184,25 @@ function AddGroupModal({ open, onClose, onGroupAdded }) {
                 sx={{ mr: { sm: 0 }, ml: { xs: -1, sm: 0 } }}
               />
             </Grid>
+            {/* --- إضافة خيار العرض في بطاقة واحدة --- */}
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={displayAsSingleCard}
+                    onChange={(e) => setDisplayAsSingleCard(e.target.checked)}
+                    color="primary"
+                    disabled={isSaving}
+                  />
+                }
+                label={
+                  <MDTypography variant="body2">
+                    Display all types in a single card (Front-end)
+                  </MDTypography>
+                }
+              />
+            </Grid>
+            {/* --- نهاية الإضافة --- */}
           </Grid>
         </MDBox>
       </DialogContent>

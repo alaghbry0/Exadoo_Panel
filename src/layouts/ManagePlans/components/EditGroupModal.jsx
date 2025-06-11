@@ -8,15 +8,15 @@ import {
   Checkbox,
   FormControlLabel,
   CircularProgress,
+  Switch, // لاستخدام Switch
 } from "@mui/material";
 
-// تأكد من أن المسار "components/MDBox" يشير إلى src/components/MDBox.jsx
 import MDBox from "components/MDBox";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
 
-import { updateSubscriptionGroup } from "services/api"; // تأكد من أن هذه الدالة مُصدّرة بشكل default
+import { updateSubscriptionGroup } from "services/api";
 import ColorPicker from "./ColorPicker";
 import IconPicker from "./IconPicker";
 
@@ -30,12 +30,12 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
   const [icon, setIcon] = useState("category");
   const [isActive, setIsActive] = useState(true);
   const [sortOrder, setSortOrder] = useState(0);
+  const [displayAsSingleCard, setDisplayAsSingleCard] = useState(false); // <--- الحالة الجديدة
 
   const [nameError, setNameError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
-  // عند فتح المودال وتوفّر بيانات المجموعة، نُعبيء الحقول
   useEffect(() => {
     if (open && existingGroupData) {
       setName(existingGroupData.name || "");
@@ -45,10 +45,10 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
       setIcon(existingGroupData.icon || "category");
       setIsActive(existingGroupData.is_active !== undefined ? existingGroupData.is_active : true);
       setSortOrder(existingGroupData.sort_order !== undefined ? existingGroupData.sort_order : 0);
+      setDisplayAsSingleCard(existingGroupData.display_as_single_card || false); // <--- تعبئة الحالة الجديدة
       setNameError(false);
       setIsSaving(false);
     } else if (!open) {
-      // إذا تم إغلاق المودال، نعيد تهيئة الحقول
       setName("");
       setDescription("");
       setImageUrl("");
@@ -56,6 +56,7 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
       setIcon("category");
       setIsActive(true);
       setSortOrder(0);
+      setDisplayAsSingleCard(false); // <--- إعادة تعيين
       setNameError(false);
       setIsSaving(false);
     }
@@ -82,6 +83,7 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
       icon: icon.trim() || "category",
       is_active: isActive,
       sort_order: parseInt(String(sortOrder), 10) || 0,
+      display_as_single_card: displayAsSingleCard, // <--- إرسال القيمة
     };
 
     setIsSaving(true);
@@ -101,10 +103,8 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
     }
   };
 
-  // إذا لم يكن المودال مفتوحًا أو لم تتوفر البيانات، لا نُظهر النموذج
   if (!open || (open && !existingGroupData && !isSaving)) {
     if (open && !existingGroupData && !isSaving) {
-      // نعرض مؤشر تحميل إذا فتحنا المودال لكن البيانات لم تصل بعد
       return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
           <DialogContent
@@ -141,7 +141,6 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
       <DialogContent sx={{ pt: 2 }}>
         <MDBox component="form" noValidate sx={{ mt: 1 }}>
           <Grid container spacing={2.5}>
-            {/* اسم المجموعة */}
             <Grid item xs={12}>
               <MDInput
                 label="Group Name *"
@@ -155,8 +154,6 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
                 variant="outlined"
               />
             </Grid>
-
-            {/* الوصف الاختياري */}
             <Grid item xs={12}>
               <MDInput
                 label="Description (Optional)"
@@ -169,8 +166,6 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
                 variant="outlined"
               />
             </Grid>
-
-            {/* اختيار اللون */}
             <Grid item xs={12} sm={6}>
               <ColorPicker
                 label="Group Color"
@@ -179,8 +174,6 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
                 disabled={isSaving}
               />
             </Grid>
-
-            {/* اختيار الأيقونة */}
             <Grid item xs={12} sm={6}>
               <IconPicker
                 label="Group Icon Name"
@@ -189,8 +182,6 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
                 disabled={isSaving}
               />
             </Grid>
-
-            {/* رابط الصورة الاختياري */}
             <Grid item xs={12}>
               <MDInput
                 label="Image URL (Optional)"
@@ -201,8 +192,6 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
                 variant="outlined"
               />
             </Grid>
-
-            {/* ترتيب العرض */}
             <Grid item xs={12} sm={6}>
               <MDInput
                 label="Sort Order"
@@ -215,8 +204,6 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
                 inputProps={{ min: 0 }}
               />
             </Grid>
-
-            {/* حالة التفعيل */}
             <Grid
               item
               xs={12}
@@ -240,6 +227,25 @@ function EditGroupModal({ open, onClose, onGroupUpdated, existingGroupData }) {
                 sx={{ mr: { sm: 0 }, ml: { xs: -1, sm: 0 } }}
               />
             </Grid>
+            {/* --- إضافة خيار العرض في بطاقة واحدة --- */}
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={displayAsSingleCard}
+                    onChange={(e) => setDisplayAsSingleCard(e.target.checked)}
+                    color="primary"
+                    disabled={isSaving}
+                  />
+                }
+                label={
+                  <MDTypography variant="body2">
+                    Display all types in a single card (Front-end)
+                  </MDTypography>
+                }
+              />
+            </Grid>
+            {/* --- نهاية الإضافة --- */}
           </Grid>
         </MDBox>
       </DialogContent>
