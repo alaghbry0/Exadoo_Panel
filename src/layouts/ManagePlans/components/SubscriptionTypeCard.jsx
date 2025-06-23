@@ -29,6 +29,7 @@ import { deleteSubscriptionPlan, deleteSubscriptionType } from "services/api";
 import AddSubscriptionPlanModal from "./AddSubscriptionPlanModal";
 import EditSubscriptionPlanModal from "./EditSubscriptionPlanModal";
 import ConfirmDeleteDialog from "./SubscriptionDelete";
+import BatchStatusIndicator from "./BatchStatusIndicator"; // <-- [تعديل جديد] استيراد المكون الجديد
 
 // ------------------- Helper Functions -------------------
 // دالة مساعدة لتحليل JSON بأمان (تبقى كما هي)
@@ -47,7 +48,16 @@ const parseJsonSafe = (jsonString) => {
 
 // ------------------- Component -------------------
 // --- [تغيير 3]: قبول props جديدة: plans, onDataChange, onEdit ---
-function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, sx }) {
+// <-- [تعديل جديد] إضافة batchStatus و onStatusClick إلى الـ props
+function SubscriptionTypeCard({
+  subscriptionType,
+  plans,
+  onDataChange,
+  onEdit,
+  batchStatus,
+  onStatusClick,
+  sx,
+}) {
   // --- [تغيير 4]: حذف الحالات المتعلقة بجلب الخطط ---
   // const [plans, setPlans] = useState([]); // <-- محذوف
   // const [loadingPlans, setLoadingPlans] = useState(true); // <-- محذوف
@@ -121,7 +131,6 @@ function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, s
 
   // دالة عرض السعر (تبقى كما هي)
   const displayPrice = (plan) => {
-    // ... الكود الحالي لعرض السعر ...
     const price = parseFloat(plan.price);
     const originalPrice = parseFloat(plan.original_price);
     if (!isNaN(originalPrice) && originalPrice > price) {
@@ -195,6 +204,11 @@ function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, s
             </MDBox>
           </MDBox>
 
+          {/* <-- [تعديل جديد] إضافة مؤشر الحالة الجديد --> */}
+          <MDBox px={0} pb={1} mt={1}>
+            <BatchStatusIndicator status={batchStatus} onClick={onStatusClick} />
+          </MDBox>
+
           {/* Main Channel Info */}
           {subscriptionType.main_channel_id && (
             <MDBox mb={1} display="flex" alignItems="center">
@@ -210,8 +224,6 @@ function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, s
           {/* Secondary Channels Info */}
           {secondaryChannelsInfo.length > 0 && (
             <MDBox mt={0.5} mb={1.5}>
-              {" "}
-              {/* تعديل mt */}
               <MDTypography
                 variant="caption"
                 fontWeight="bold"
@@ -225,12 +237,8 @@ function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, s
               <List dense disablePadding sx={{ pl: 0.5 }}>
                 {secondaryChannelsInfo.map((channel) => (
                   <ListItem key={channel.channel_id} disableGutters sx={{ py: 0.2 }}>
-                    {" "}
-                    {/* تعديل py */}
                     <ListItemIcon sx={{ minWidth: "20px", mr: 0.5 }}>
-                      {" "}
-                      {/* تعديل minWidth و mr */}
-                      <LinkIcon fontSize="small" color="action" /> {/* تعديل fontSize */}
+                      <LinkIcon fontSize="small" color="action" />
                     </ListItemIcon>
                     <ListItemText
                       primary={
@@ -267,8 +275,6 @@ function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, s
                 mt={0}
                 sx={{ listStyleType: "disc", marginBlockStart: 0, marginBlockEnd: 0 }}
               >
-                {" "}
-                {/* تعديل pl */}
                 {featuresArray.map((feature, index) => (
                   <MDBox
                     component="li"
@@ -281,8 +287,6 @@ function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, s
                       },
                     }}
                   >
-                    {" "}
-                    {/* تعديل mb و fontSize */}
                     <MDTypography variant="caption" color="text.secondary">
                       {feature}
                     </MDTypography>
@@ -314,21 +318,14 @@ function SubscriptionTypeCard({ subscriptionType, plans, onDataChange, onEdit, s
                 Terms & Conditions:
               </MDTypography>
               <List dense disablePadding sx={{ pl: 0.5 }}>
-                {" "}
-                {/* إضافة pl */}
                 {termsArray.map((term, index) => (
                   <ListItem key={index} disableGutters sx={{ py: 0.2, alignItems: "flex-start" }}>
-                    {" "}
-                    {/* تعديل py و alignItems */}
                     <ListItemIcon sx={{ minWidth: "18px", marginRight: "6px", mt: "3px" }}>
-                      {" "}
-                      {/* تعديل minWidth, mr, mt */}
                       <CheckCircleOutlineIcon
                         fontSize="small"
                         color="success"
                         sx={{ fontSize: "0.85rem" }}
-                      />{" "}
-                      {/* تعديل fontSize */}
+                      />
                     </ListItemIcon>
                     <ListItemText
                       primary={

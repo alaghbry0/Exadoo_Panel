@@ -84,6 +84,53 @@ export const updateSubscriptionType = async (typeId, data) => {
   }
 };
 
+export const getLatestBatchForSubscriptionType = async (typeId) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/api/admin/messaging-batches/latest-for-type/${typeId}`, // تأكد من تطابق هذا المسار مع الخادم
+      { headers: getAuthHeaders() }
+    );
+    return response.data; // إذا كان الخادم يرجع null عند عدم العثور، هذا جيد
+  } catch (error) {
+    if (error.response?.status === 404) return null; // جيد
+    console.error(
+      "API Error - getLatestBatchForSubscriptionType:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+// ملاحظة: إذا لم ترغب في إضافة المسار أعلاه في الخادم، يمكنك حذفه.
+// وسيقوم polling في ManagePlans بجلب الحالة عند الحاجة.
+
+// دالة لجلب تفاصيل مهمة مراسلة محددة
+export const getBatchDetails = async (batchId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/messaging-batches/${batchId}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error - getBatchDetails:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// دالة لبدء إعادة محاولة لمهمة فاشلة
+export const retryMessagingBatch = async (batchId) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/messaging-batches/${batchId}/retry`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error - retryMessagingBatch:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 // === APIs الخاصة بالمجموعات ===
 
 // جلب جميع مجموعات الاشتراكات
@@ -918,6 +965,83 @@ export const getRecentPayments = async (limit = 10) => {
     return response.data;
   } catch (error) {
     console.error("Error fetching recent payments:", error);
+    throw error;
+  }
+};
+
+export const getTargetGroups = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/messaging/target-groups`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error - getTargetGroups:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// لمعاينة عينة من المستخدمين الذين سيتم استهدافهم
+export const previewTargetUsers = async (targetGroup, subscriptionTypeId = null) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/messaging/preview-users`,
+      {
+        target_group: targetGroup,
+        subscription_type_id: subscriptionTypeId,
+        limit: 10, // يمكن جعله متغيرًا إذا أردت
+      },
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error - previewTargetUsers:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// لجلب المتغيرات المتاحة للاستخدام في الرسائل
+export const getAvailableVariables = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/messaging/available-variables`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error - getAvailableVariables:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// لبدء مهمة بث جديدة (استخدم المسار المحسن)
+export const startBroadcast = async (messageText, targetGroup, subscriptionTypeId = null) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/messaging/broadcast`, // تأكد من أنه المسار الصحيح والمحسن
+      {
+        message_text: messageText,
+        target_group: targetGroup,
+        subscription_type_id: subscriptionTypeId,
+      },
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("API Error - startBroadcast:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// لجلب سجل مهام المراسلة مع التصفح
+export const getBroadcastHistory = async (page = 1, pageSize = 10) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/messaging/batches`, {
+      params: { page, page_size: pageSize, batch_type: "broadcast" }, // فلترة حسب نوع البث
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error - getBroadcastHistory:", error.response?.data || error.message);
     throw error;
   }
 };

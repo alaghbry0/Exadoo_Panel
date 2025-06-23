@@ -1,7 +1,7 @@
 // src/layouts/ManagePlans/index.js
 
 // ------------------- Imports -------------------
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Grid,
   Card,
@@ -27,26 +27,33 @@ import MDButton from "components/MDButton";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 
-// --- [تغيير 1]: استيراد الدوال الجديدة من API ---
-import { getSubscriptionData, getSubscriptionGroups, deleteSubscriptionGroup } from "services/api";
+// --- استيراد الدوال والمكونات الجديدة من API ---
+import {
+  getSubscriptionData,
+  getSubscriptionGroups,
+  deleteSubscriptionGroup,
+  getBatchDetails,
+  retryMessagingBatch,
+} from "services/api";
 import SubscriptionTypeCard from "./components/SubscriptionTypeCard";
 import SubscriptionTypeFormModal from "./components/SubscriptionTypeFormModal";
 import AddGroupModal from "./components/AddGroupModal";
 import EditGroupModal from "./components/EditGroupModal";
+import BatchDetailsModal from "./components/BatchDetailsModal";
 
 // ------------------- Component -------------------
 function ManagePlans() {
   const { enqueueSnackbar } = useSnackbar();
 
-  // --- [تغيير 2]: إعادة هيكلة الحالات (States) ---
-  const [subscriptionData, setSubscriptionData] = useState([]); // الحالة الرئيسية لكل البيانات
-  const [availableGroups, setAvailableGroups] = useState([]); // قائمة منفصلة للنوافذ المنبثقة
+  // --- الحالات (States) ---
+  const [subscriptionData, setSubscriptionData] = useState([]);
+  const [availableGroups, setAvailableGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // حالات النوافذ المنبثقة
   const [isTypeFormOpen, setIsTypeFormOpen] = useState(false);
-  const [editingType, setEditingType] = useState(null); // لتحديد النوع المراد تعديله
+  const [editingType, setEditingType] = useState(null);
 
   const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
   const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
@@ -54,20 +61,28 @@ function ManagePlans() {
 
   const [expandedGroups, setExpandedGroups] = useState({});
 
-  // --- [تغيير 3]: دالة واحدة لجلب كل البيانات ---
+  // --- حالة لتتبع مهام المراسلة في الخلفية ---
+  const [batchStatuses, setBatchStatuses] = useState({});
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedBatchId, setSelectedBatchId] = useState(null);
+
+  // ✅ [تعديل] تحديث Refs لإدارة Polling
+  const pollingIntervalRef = useRef(null);
+  // ✅ [إضافة جديدة] لتتبع محاولات Polling الفاشلة و Exponential Backoff
+  const pollFailuresRef = useRef({}); // { [batch_id]: failureCount }
+  const basePollInterval = 5000; // 5 ثوانٍ
+
+  // --- دالة جلب البيانات ---
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // استدعاء API واحد يجلب المجموعات، الأنواع، والخطط
       const data = await getSubscriptionData();
       setSubscriptionData(data || []);
 
-      // استدعاء منفصل لقائمة المجموعات النظيفة للـ Modals
       const groupsList = await getSubscriptionGroups();
       setAvailableGroups(groupsList || []);
 
-      // منطق توسيع المجموعات الافتراضي
       const initialExpanded = {};
       if (Array.isArray(data)) {
         data.forEach((group) => {
@@ -85,31 +100,142 @@ function ManagePlans() {
     } finally {
       setLoading(false);
     }
-  }, []); // لا توجد تبعيات لأنها لا تعتمد على props أو state
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // --- دالة واحدة لتحديث البيانات بعد أي تغيير ---
-  const handleDataChange = () => {
+  // --- ✅ [تعديل] منطق التحقق الدوري (Polling) مع تتبع الفشل ---
+  const pollStatuses = useCallback(async () => {
+    const batchesToPoll = Object.values(batchStatuses).filter(
+      (statusObj) =>
+        statusObj && (statusObj.status === "pending" || statusObj.status === "in_progress")
+    );
+
+    if (batchesToPoll.length === 0) {
+      if (pollingIntervalRef.current) {
+        clearTimeout(pollingIntervalRef.current); // استخدم clearTimeout
+        pollingIntervalRef.current = null;
+        pollFailuresRef.current = {}; // إعادة تعيين عداد الفشل
+        console.log("Polling stopped: No active batches.");
+      }
+      return;
+    }
+
+    console.log(
+      "Polling for batches:",
+      batchesToPoll.map((b) => b.batch_id)
+    );
+
+    const statusPromises = batchesToPoll.map((batch) =>
+      getBatchDetails(batch.batch_id)
+        .then((response) => {
+          // ✅ [تعديل] إعادة تعيين عداد الفشل عند النجاح
+          if (pollFailuresRef.current[batch.batch_id]) {
+            delete pollFailuresRef.current[batch.batch_id];
+          }
+          return response;
+        })
+        .catch((err) => {
+          console.error(`Failed to poll batch ${batch.batch_id}`, err);
+          // ✅ [تعديل] زيادة عداد الفشل
+          pollFailuresRef.current[batch.batch_id] =
+            (pollFailuresRef.current[batch.batch_id] || 0) + 1;
+          return batch; // أعد الحالة القديمة في حالة فشل الجلب
+        })
+    );
+
+    const updatedBatches = await Promise.all(statusPromises);
+
+    setBatchStatuses((prev) => {
+      const newStatuses = { ...prev };
+      let changed = false;
+      updatedBatches.forEach((batch) => {
+        if (batch && newStatuses[batch.subscription_type_id]?.batch_id === batch.batch_id) {
+          if (newStatuses[batch.subscription_type_id].status !== batch.status) {
+            newStatuses[batch.subscription_type_id] = batch;
+            changed = true;
+            if (batch.status === "completed" || batch.status === "failed") {
+              enqueueSnackbar(`Task for a subscription has finished.`, { variant: "info" });
+            }
+          }
+        }
+      });
+      return changed ? newStatuses : prev;
+    });
+  }, [batchStatuses, enqueueSnackbar]);
+
+  // --- ✅ [تعديل] useEffect الخاص بالتحقق الدوري باستخدام setTimeout و Exponential Backoff ---
+  useEffect(() => {
+    const shouldPoll = Object.values(batchStatuses).some(
+      (s) => s && (s.status === "pending" || s.status === "in_progress")
+    );
+
+    if (pollingIntervalRef.current) {
+      clearTimeout(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+
+    if (shouldPoll) {
+      console.log("Polling started.");
+      // ✅ [تعديل] استخدام فاصل زمني ديناميكي
+      const scheduleNextPoll = () => {
+        // حساب أطول فترة انتظار بناءً على المحاولات الفاشلة
+        const maxFailures = Math.max(0, ...Object.values(pollFailuresRef.current));
+        // Exponential backoff: 5s, 10s, 20s, 40s... capped at ~1 minute
+        const delay = Math.min(basePollInterval * Math.pow(2, maxFailures), 60000);
+
+        pollingIntervalRef.current = setTimeout(() => {
+          pollStatuses().finally(scheduleNextPoll); // أعد الجدولة بعد انتهاء الجلب الحالي
+        }, delay);
+      };
+
+      // ابدأ الدورة الأولى فورًا
+      pollStatuses().finally(scheduleNextPoll);
+    }
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearTimeout(pollingIntervalRef.current); // استخدم clearTimeout بدلًا من clearInterval
+      }
+    };
+  }, [batchStatuses, pollStatuses]); // الاعتماديات صحيحة
+
+  // --- دالة تحديث البيانات بعد أي تغيير ---
+  const handleDataChange = (updateResult = null) => {
+    if (updateResult && updateResult.invite_batch_id) {
+      const typeId = updateResult.id;
+      const newBatchId = updateResult.invite_batch_id;
+
+      setBatchStatuses((prev) => ({
+        ...prev,
+        [typeId]: {
+          batch_id: newBatchId,
+          subscription_type_id: typeId,
+          status: "pending",
+          batch_type: "invite",
+        },
+      }));
+      enqueueSnackbar("Invite process has been started in the background.", { variant: "info" });
+    }
     fetchData();
   };
 
-  // --- [تغيير 4]: دوال فتح وإغلاق النوافذ المنبثقة (Modals) ---
+  // --- دوال فتح وإغلاق النوافذ المنبثقة ---
   const handleOpenAddType = () => {
-    setEditingType(null); // تأكد من أنه لا يوجد نوع محدد (وضع الإضافة)
+    setEditingType(null);
     setIsTypeFormOpen(true);
   };
 
   const handleOpenEditType = (type) => {
-    setEditingType(type); // حدد النوع للتعديل
+    setEditingType(type);
     setIsTypeFormOpen(true);
   };
 
   const handleCloseTypeForm = () => {
     setIsTypeFormOpen(false);
-    setEditingType(null); // نظّف الحالة عند الإغلاق
+    setEditingType(null);
   };
 
   const handleOpenAddGroup = () => setIsAddGroupModalOpen(true);
@@ -125,8 +251,19 @@ function ManagePlans() {
   };
 
   const toggleGroupExpansion = (groupId) => {
-    if (!groupId) return; // لا تفعل شيئًا للأنواع غير المجمعة
+    if (!groupId) return;
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  // --- دوال فتح وإغلاق النافذة المنبثقة للتفاصيل ---
+  const handleOpenDetailsModal = (batchId) => {
+    setSelectedBatchId(batchId);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handleCloseDetailsModal = () => {
+    setSelectedBatchId(null);
+    setIsDetailsModalOpen(false);
   };
 
   const handleDeleteGroup = async (groupId, groupName) => {
@@ -134,7 +271,7 @@ function ManagePlans() {
       try {
         await deleteSubscriptionGroup(groupId);
         enqueueSnackbar(`Group "${groupName}" deleted successfully.`, { variant: "success" });
-        handleDataChange(); // أعد جلب البيانات
+        handleDataChange();
       } catch (err) {
         console.error("Error deleting group:", err);
         enqueueSnackbar(err.response?.data?.error || `Failed to delete group "${groupName}".`, {
@@ -212,7 +349,6 @@ function ManagePlans() {
           </MDBox>
         </MDBox>
 
-        {/* --- [تغيير 5]: منطق العرض يعتمد على subscriptionData --- */}
         {subscriptionData && subscriptionData.length > 0 ? (
           subscriptionData.map((group) => (
             <Card key={group.id || "ungrouped-section"} sx={{ mb: 3, overflow: "visible" }}>
@@ -299,9 +435,16 @@ function ManagePlans() {
                         <Grid item xs={12} md={6} lg={4} key={type.id}>
                           <SubscriptionTypeCard
                             subscriptionType={type}
-                            plans={type.plans || []} // تمرير الخطط الجاهزة
-                            onDataChange={handleDataChange} // تمرير دالة التحديث
-                            onEdit={() => handleOpenEditType(type)} // تمرير دالة لفتح نافذة التعديل
+                            plans={type.plans || []}
+                            onDataChange={handleDataChange}
+                            onEdit={() => handleOpenEditType(type)}
+                            batchStatus={batchStatuses[type.id]}
+                            onStatusClick={() => {
+                              const batch = batchStatuses[type.id];
+                              if (batch && batch.batch_id) {
+                                handleOpenDetailsModal(batch.batch_id);
+                              }
+                            }}
                           />
                         </Grid>
                       ))}
@@ -365,12 +508,12 @@ function ManagePlans() {
         )}
       </MDBox>
 
-      {/* --- [تغيير 6]: النوافذ المنبثقة تتلقى البيانات كـ props --- */}
+      {/* --- النوافذ المنبثقة --- */}
       {isTypeFormOpen && (
         <SubscriptionTypeFormModal
           open={isTypeFormOpen}
           onClose={handleCloseTypeForm}
-          onSuccess={handleDataChange}
+          onSuccess={(result) => handleDataChange(result)}
           mode={editingType ? "edit" : "add"}
           initialData={editingType}
           availableGroups={availableGroups}
@@ -389,6 +532,29 @@ function ManagePlans() {
           onClose={handleCloseEditGroup}
           onGroupUpdated={handleDataChange}
           existingGroupData={editingGroup}
+        />
+      )}
+
+      {/* --- النافذة المنبثقة الجديدة لتفاصيل المهمة --- */}
+      {isDetailsModalOpen && selectedBatchId && (
+        <BatchDetailsModal
+          open={isDetailsModalOpen}
+          onClose={handleCloseDetailsModal}
+          batchId={selectedBatchId}
+          // ✅ [تعديل] تحديث onRetry لقبول batchType وتمريره
+          onRetry={(newBatchId, typeId, batchType) => {
+            setBatchStatuses((prev) => ({
+              ...prev,
+              [typeId]: {
+                batch_id: newBatchId,
+                subscription_type_id: typeId,
+                status: "pending",
+                batch_type: batchType, // ✅ إضافة batch_type هنا
+              },
+            }));
+            handleCloseDetailsModal();
+          }}
+          apiFn={{ getDetails: getBatchDetails, retry: retryMessagingBatch }}
         />
       )}
     </DashboardLayout>

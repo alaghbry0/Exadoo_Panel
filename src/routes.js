@@ -1,4 +1,5 @@
-// routes.js
+// src/routes.js
+
 import Dashboard from "layouts/dashboard";
 import Tables from "layouts/tables";
 import ManagePlans from "layouts/ManagePlans";
@@ -7,8 +8,11 @@ import IncomingTransactions from "layouts/incomingTransactions";
 import Profile from "layouts/profile";
 import SignIn from "layouts/authentication/sign-in";
 import ChatbotSettings from "layouts/ChatbotSettings";
-import Icon from "@mui/material/Icon";
 import Users from "layouts/users";
+import Broadcasts from "layouts/broadcasts";
+
+// Material UI Icon component
+import Icon from "@mui/material/Icon";
 
 const routes = [
   {
@@ -42,6 +46,14 @@ const routes = [
     icon: <Icon fontSize="small">table_view</Icon>,
     route: "/tables",
     component: <Tables />,
+  },
+  {
+    type: "collapse",
+    name: "Broadcasts", // Broadcast Messages
+    key: "broadcasts",
+    icon: <Icon fontSize="small">campaign</Icon>, // أيقونة مناسبة
+    route: "/broadcasts",
+    component: <Broadcasts />,
   },
   {
     type: "collapse",
