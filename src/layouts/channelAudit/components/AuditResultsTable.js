@@ -7,6 +7,13 @@ import { Link } from "react-router-dom";
 import Icon from "@mui/material/Icon";
 import Tooltip from "@mui/material/Tooltip";
 import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemText from "@mui/material/ListItemText";
+import DialogActions from "@mui/material/DialogActions";
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -18,31 +25,68 @@ import MDBadge from "components/MDBadge";
 import DataTable from "examples/Tables/DataTable";
 
 // API
-import { startChannelCleanup } from "services/api";
+import { startChannelCleanup, getRemovableUsers } from "services/api"; // <-- تم إضافة getRemovableUsers
 
-// مكون مساعد لعرض اسم القناة بشكل منمق
+// --- المكونات المساعدة (بدون تغيير) ---
 const Channel = ({ name, id }) => (
   <MDBox display="flex" alignItems="center" lineHeight={1}>
     <MDTypography display="block" variant="button" fontWeight="medium">
       {name || "قناة غير مسماة"}
     </MDTypography>
-    <MDTypography variant="caption"> ({id})</MDTypography>
+    <MDTypography variant="caption">  ({id})</MDTypography>
   </MDBox>
 );
 
-// مكون مساعد لعرض الإحصائيات والأرقام
 const StatCell = ({ value, color = "text", fontWeight = "medium" }) => (
   <MDTypography variant="caption" color={color} fontWeight={fontWeight}>
-    {/* نعرض طول المصفوفة إذا كانت القيمة مصفوفة (مثل users_to_remove) */}
-    {Array.isArray(value) ? value.length : value ?? "---"}
+    {value ?? "---"}
   </MDTypography>
 );
 
+// --- المكون الرئيسي مع التعديلات ---
 function AuditResultsTable({ auditData, setSnackbar }) {
+  // --- الحالة الحالية (بدون تغيير) ---
   const [cleanupState, setCleanupState] = useState({});
-  // استخدام قيم افتراضية آمنة لمنع الأخطاء إذا كانت البيانات غير موجودة
-  const { audit_uuid, channel_results: auditResults = [], is_running: isAuditRunning } = auditData; //  <--  التعديل هنا
+  const { audit_uuid, channel_results: auditResults = [], is_running: isAuditRunning } = auditData;
 
+  // --- [جديد] حالة النافذة المنبثقة (Modal/Dialog) ---
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalUsers, setModalUsers] = useState([]);
+  const [modalTitle, setModalTitle] = useState("");
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false); // حالة للتحميل
+
+  // --- [جديد] دالة لفتح النافذة وجلب بيانات المستخدمين ---
+  const showUsersModal = async (channelId, channelName, usersToRemoveCount) => {
+    setModalTitle(`المرشحون للإزالة من قناة "${channelName}" (${usersToRemoveCount} مستخدم)`);
+    setModalOpen(true);
+    setModalUsers([]); // تفريغ القائمة القديمة لإظهار رسالة التحميل
+    setIsLoadingUsers(true);
+    try {
+      const users = await getRemovableUsers(audit_uuid, channelId);
+      setModalUsers(users);
+    } catch (error) {
+      // يمكنك عرض رسالة خطأ هنا إذا أردت
+      console.error("Failed to fetch removable users:", error);
+      setSnackbar({
+        open: true,
+        color: "error",
+        title: "خطأ",
+        message: "فشل في جلب قائمة المستخدمين.",
+      });
+      // إغلاق النافذة عند حدوث خطأ
+      handleCloseModal();
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  // --- [جديد] دالة لإغلاق النافذة المنبثقة ---
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setModalUsers([]);
+  };
+
+  // --- دالة بدء التنظيف (بدون تغيير) ---
   const handleStartCleanup = async (channelId) => {
     setCleanupState((prev) => ({ ...prev, [channelId]: { loading: true, batchId: null } }));
     try {
@@ -55,7 +99,7 @@ function AuditResultsTable({ auditData, setSnackbar }) {
         open: true,
         color: "success",
         title: "بدأت مهمة الإزالة",
-        message: `تم بدء عملية إزالة الأعضاء من القناة. يمكنك متابعة التقدم من صفحة المهام.`,
+        message: "تم بدء عملية إزالة الأعضاء من القناة. يمكنك متابعة التقدم من صفحة المهام.",
       });
     } catch (error) {
       setCleanupState((prev) => ({ ...prev, [channelId]: { loading: false } }));
@@ -80,9 +124,24 @@ function AuditResultsTable({ auditData, setSnackbar }) {
     ];
 
     const rows = auditResults.map((row) => {
-      const usersToRemoveCount = row.users_to_remove?.length || 0;
+      let usersToRemoveCount = 0;
+      if (row.users_to_remove) {
+        if (typeof row.users_to_remove === "object" && Array.isArray(row.users_to_remove.ids)) {
+          usersToRemoveCount = row.users_to_remove.ids.length;
+        } else if (typeof row.users_to_remove === "string") {
+          try {
+            const parsedData = JSON.parse(row.users_to_remove);
+            if (Array.isArray(parsedData.ids)) {
+              usersToRemoveCount = parsedData.ids.length;
+            }
+          } catch (e) {
+            // تجاهل
+          }
+        }
+      }
 
       return {
+        // ... الأعمدة الأخرى تبقى كما هي ...
         channel: <Channel name={row.channel_name} id={row.channel_id} />,
         status: (
           <MDBox textAlign="center">
@@ -93,16 +152,34 @@ function AuditResultsTable({ auditData, setSnackbar }) {
             {row.status === "FAILED" && (
               <MDBadge badgeContent="فشل" color="error" variant="gradient" size="sm" />
             )}
+            {row.status === "PENDING" && (
+              <MDBadge badgeContent="معلق" color="secondary" variant="gradient" size="sm" />
+            )}
           </MDBox>
         ),
         total_members: <StatCell value={row.total_members_api} />,
         inactive_members: <StatCell value={row.inactive_in_channel_db} color="warning" />,
         unidentified: <StatCell value={row.unidentified_members} />,
-        to_remove: <StatCell value={usersToRemoveCount} color="error" fontWeight="bold" />,
-        // ----- بداية الجزء المعدّل -----
+
+        // --- [تعديل] جعل خانة "مرشحين للإزالة" قابلة للنقر ---
+        to_remove: (
+          <MDBox
+            onClick={() => {
+              // لا نفتح النافذة إذا كان العدد صفراً
+              if (usersToRemoveCount > 0) {
+                showUsersModal(row.channel_id, row.channel_name, usersToRemoveCount);
+              }
+            }}
+            // تغيير شكل المؤشر فقط إذا كان هناك مستخدمون للعرض
+            sx={{ cursor: usersToRemoveCount > 0 ? "pointer" : "default", display: "inline-block" }}
+          >
+            <StatCell value={usersToRemoveCount} color="error" fontWeight="bold" />
+          </MDBox>
+        ),
+
+        // --- عمود الإجراء (بدون تغيير) ---
         action: (
           <MDBox>
-            {/* الحالة 1: اكتمل وهناك أعضاء لإزالتهم */}
             {row.status === "COMPLETED" &&
               usersToRemoveCount > 0 &&
               (cleanupState[row.channel_id]?.batchId ? (
@@ -130,30 +207,69 @@ function AuditResultsTable({ auditData, setSnackbar }) {
                   )}
                 </MDButton>
               ))}
-
-            {/* الحالة 2: اكتمل ولا يوجد أعضاء لإزالتهم */}
             {row.status === "COMPLETED" && usersToRemoveCount === 0 && (
               <MDTypography variant="caption" color="text">
                 لا يوجد
               </MDTypography>
             )}
+            {row.status !== "COMPLETED" && (
+              <MDTypography variant="caption" color="text">
+                ---
+              </MDTypography>
+            )}
           </MDBox>
         ),
-        // ----- نهاية الجزء المعدّل -----
       };
     });
 
     return { columns, rows };
-  }, [auditResults, cleanupState, isAuditRunning]);
+  }, [auditResults, cleanupState, isAuditRunning, audit_uuid]); // <-- أضفنا audit_uuid للـ dependencies
 
+  // --- [تعديل] إضافة النافذة المنبثقة بعد الجدول ---
   return (
-    <DataTable
-      table={tableData}
-      isSorted={false}
-      entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25, 50] }}
-      showTotalEntries
-      noEndBorder
-    />
+    <>
+      <DataTable
+        table={tableData}
+        isSorted={false}
+        entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25, 50] }}
+        showTotalEntries
+        noEndBorder
+      />
+
+      {/* [جديد] النافذة المنبثقة لعرض المستخدمين */}
+      <Dialog open={modalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+        <DialogTitle>{modalTitle}</DialogTitle>
+        <DialogContent dividers>
+          <List>
+            {isLoadingUsers ? (
+              <ListItem>
+                <ListItemText primary="جاري تحميل المستخدمين..." />
+              </ListItem>
+            ) : modalUsers.length > 0 ? (
+              modalUsers.map((user) => (
+                <ListItem key={user.telegram_id}>
+                  <ListItemText
+                    primary={user.full_name || "اسم غير معروف"}
+                    secondary={`@${user.username || "لا يوجد اسم مستخدم"} - ID: ${
+                      user.telegram_id
+                    }`}
+                  />
+                </ListItem>
+              ))
+            ) : (
+              <ListItem>
+                <ListItemText primary="لم يتم العثور على مستخدمين." />
+              </ListItem>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <MDButton onClick={handleCloseModal} color="secondary">
+            إغلاق
+          </MDButton>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 

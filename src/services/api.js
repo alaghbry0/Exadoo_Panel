@@ -1106,4 +1106,17 @@ export const getAuditsHistory = async () => {
   }
 };
 
+export const getRemovableUsers = async (auditUuid, channelId) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/api/admin/channels/audit/removable_users/${auditUuid}/${channelId}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data; // سيعيد قائمة بالمستخدمين
+  } catch (error) {
+    console.error("API Error - getRemovableUsers:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export default apiClient;
