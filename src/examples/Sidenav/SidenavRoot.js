@@ -1,17 +1,4 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.2.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2023 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
+//src\examples\Sidenav\SidenavRoot.js
 
 // @mui material components
 import Drawer from "@mui/material/Drawer";
@@ -36,7 +23,6 @@ export default styled(Drawer)(({ theme, ownerState }) => {
     backgroundValue = white.main;
   }
 
-  // styles for the sidenav when miniSidenav={false}
   const drawerOpenStyles = () => ({
     background: backgroundValue,
     transform: "translateX(0)",
@@ -44,7 +30,6 @@ export default styled(Drawer)(({ theme, ownerState }) => {
       easing: transitions.easing.sharp,
       duration: transitions.duration.shorter,
     }),
-
     [breakpoints.up("xl")]: {
       boxShadow: transparentSidenav ? "none" : xxl,
       marginBottom: transparentSidenav ? 0 : "inherit",
@@ -58,7 +43,6 @@ export default styled(Drawer)(({ theme, ownerState }) => {
     },
   });
 
-  // styles for the sidenav when miniSidenav={true}
   const drawerCloseStyles = () => ({
     background: backgroundValue,
     transform: `translateX(${pxToRem(-320)})`,
@@ -66,7 +50,6 @@ export default styled(Drawer)(({ theme, ownerState }) => {
       easing: transitions.easing.sharp,
       duration: transitions.duration.shorter,
     }),
-
     [breakpoints.up("xl")]: {
       boxShadow: transparentSidenav ? "none" : xxl,
       marginBottom: transparentSidenav ? 0 : "inherit",
@@ -85,6 +68,10 @@ export default styled(Drawer)(({ theme, ownerState }) => {
     "& .MuiDrawer-paper": {
       boxShadow: xxl,
       border: "none",
+      // A-Shariki: تعديلات Flexbox لتثبيت الرأس والتذييل
+      display: "flex",
+      flexDirection: "column",
+      height: "100vh", // اجعل القائمة تأخذ كامل ارتفاع الشاشة
 
       ...(miniSidenav ? drawerCloseStyles() : drawerOpenStyles()),
     },

@@ -140,18 +140,18 @@ function WalletSettingsSection() {
               مفتاح API لـ DeepSeek
             </MDTypography>
             <MDInput
-              type="password"
+              type="text"
               label="مفتاح API"
               fullWidth
-              value={walletData.apiKey}
-              onChange={handleChange("apiKey")}
+              value={inputApiKey} // <-- التغيير الأول: الربط بالحالة الصحيحة
+              onChange={(e) => setInputApiKey(e.target.value)} // <-- التغيير الثاني: تحديث الحالة الصحيحة
               placeholder={
-                walletData.apiKey
+                walletData.apiKey // يمكنك الآن استخدام walletData.apiKey فقط لتحديد ما إذا كان هناك مفتاح مخزن
                   ? "أدخل مفتاحًا جديدًا لتغييره (اتركه فارغًا للإبقاء على الحالي)"
                   : "أدخل مفتاح API"
               }
               inputProps={{
-                autoComplete: "new-password",
+                autoComplete: "new-password", // جيد للحفاظ عليه
               }}
             />
             {walletData.apiKey && (

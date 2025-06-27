@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useState, useEffect, useMemo } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
@@ -14,7 +15,7 @@ import rtlPlugin from "stylis-plugin-rtl";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import { useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "context";
-import routes from "routes";
+import routes from "routes"; // تأكد من استيراد المسارات
 import brandWhite from "assets/images/logo-ct.png";
 import brandDark from "assets/images/logo-ct-dark.png";
 import PrivateRoute from "./PrivateRoute";
@@ -89,6 +90,22 @@ export default function App() {
   }, []);
   // ================================================
 
+  // A-Shariki: دالة لتسطيح المسارات المتداخلة
+  const getRoutes = (allRoutes) => {
+    const flattenedRoutes = [];
+    allRoutes.forEach((route) => {
+      if (route.collapse) {
+        flattenedRoutes.push(...getRoutes(route.collapse));
+      }
+      if (route.route) {
+        flattenedRoutes.push(route);
+      }
+    });
+    return flattenedRoutes;
+  };
+
+  const allRoutes = getRoutes(routes);
+
   const content = (
     <>
       {layout === "dashboard" && (
@@ -97,7 +114,7 @@ export default function App() {
             color={sidenavColor}
             brand={(transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite}
             brandName="Exaado Bannel"
-            routes={routes}
+            routes={routes} // هنا نمرر المسارات الأصلية للقائمة الجانبية
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
           />
@@ -106,7 +123,8 @@ export default function App() {
       )}
       <Routes>
         <Route path="/authentication/sign-in" element={<SignIn />} />
-        {routes.map((route) => (
+        {/* A-Shariki: نستخدم المسارات المسطحة هنا للراوتر */}
+        {allRoutes.map((route) => (
           <Route
             key={route.key}
             path={route.route}

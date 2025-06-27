@@ -10,6 +10,7 @@ import SignIn from "layouts/authentication/sign-in";
 import ChatbotSettings from "layouts/ChatbotSettings";
 import Users from "layouts/users";
 import Broadcasts from "layouts/broadcasts";
+import ChannelAudit from "layouts/channelAudit";
 
 // Material UI Icon component
 import Icon from "@mui/material/Icon";
@@ -49,14 +50,6 @@ const routes = [
   },
   {
     type: "collapse",
-    name: "Broadcasts", // Broadcast Messages
-    key: "broadcasts",
-    icon: <Icon fontSize="small">campaign</Icon>, // أيقونة مناسبة
-    route: "/broadcasts",
-    component: <Broadcasts />,
-  },
-  {
-    type: "collapse",
     name: "Chatbot Settings",
     key: "chatbot-settings",
     icon: <Icon fontSize="small">smart_toy</Icon>,
@@ -78,6 +71,30 @@ const routes = [
     icon: <Icon fontSize="small">receipt</Icon>,
     route: "/incoming-transactions",
     component: <IncomingTransactions />,
+  },
+  {
+    type: "collapse-group", // <-- نوع جديد للقائمة المنسدلة
+    name: "Tools",
+    key: "tools",
+    icon: <Icon fontSize="small">build</Icon>,
+    collapse: [
+      {
+        type: "collapse",
+        name: "Broadcasts", // Broadcast Messages
+        key: "broadcasts",
+        icon: <Icon fontSize="small">campaign</Icon>, // أيقونة مناسبة
+        route: "/broadcasts",
+        component: <Broadcasts />,
+      },
+      {
+        type: "collapse",
+        name: "Channel Audit",
+        key: "channel-audit",
+        icon: <Icon fontSize="small">rule</Icon>, // أيقونة مناسبة
+        route: "/channel-audit",
+        component: <ChannelAudit />, // <-- ربط المكون الجديد
+      },
+    ],
   },
   {
     type: "collapse",

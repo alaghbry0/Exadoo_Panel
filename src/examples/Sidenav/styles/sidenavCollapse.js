@@ -1,17 +1,5 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.2.0
-=========================================================
+//src\examples\Sidenav\styles\sidenavCollapse.js
 
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2023 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
 function collapseItem(theme, ownerState) {
   const { palette, transitions, breakpoints, boxShadows, borders, functions } = theme;
   const { active, transparentSidenav, whiteSidenav, darkMode, sidenavColor } = ownerState;
@@ -63,6 +51,7 @@ function collapseItem(theme, ownerState) {
   };
 }
 
+// ... (دالة collapseIconBox لا تتغير)
 function collapseIconBox(theme, ownerState) {
   const { palette, transitions, borders, functions } = theme;
   const { transparentSidenav, whiteSidenav, darkMode, active } = ownerState;
@@ -98,7 +87,8 @@ const collapseIcon = ({ palette: { white, gradients } }, { active }) => ({
 
 function collapseText(theme, ownerState) {
   const { typography, transitions, breakpoints, functions } = theme;
-  const { miniSidenav, transparentSidenav, active } = ownerState;
+  // A-Shariki: استخراج isSubitem
+  const { miniSidenav, transparentSidenav, active, isSubitem } = ownerState;
 
   const { size, fontWeightRegular, fontWeightLight } = typography;
   const { pxToRem } = functions;
@@ -118,7 +108,8 @@ function collapseText(theme, ownerState) {
 
     "& span": {
       fontWeight: active ? fontWeightRegular : fontWeightLight,
-      fontSize: size.sm,
+      // A-Shariki: تغيير حجم الخط بناءً على isSubitem
+      fontSize: isSubitem ? size.xs : size.sm,
       lineHeight: 0,
     },
   };

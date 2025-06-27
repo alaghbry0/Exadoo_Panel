@@ -1046,4 +1046,64 @@ export const getBroadcastHistory = async (page = 1, pageSize = 10) => {
   }
 };
 
+// 1. لبدء مهمة فحص جديدة
+export const startChannelAudit = async () => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/channels/audit/start`,
+      {}, // لا يوجد body مطلوب هنا
+      { headers: getAuthHeaders() }
+    );
+    return response.data; // سيعيد { message, audit_uuid }
+  } catch (error) {
+    console.error("API Error - startChannelAudit:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 2. لجلب حالة ونتائج فحص معين
+export const getChannelAuditStatus = async (auditUuid) => {
+  if (!auditUuid) return; // لا تقم بالطلب إذا لم يكن هناك UUID
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/api/admin/channels/audit/status/${auditUuid}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data; // سيعيد { audit_uuid, is_running, results }
+  } catch (error) {
+    console.error("API Error - getChannelAuditStatus:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 3. لبدء مهمة إزالة المستخدمين لقناة معينة
+export const startChannelCleanup = async (auditUuid, channelId) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/channels/cleanup/start`,
+      {
+        audit_uuid: auditUuid,
+        channel_id: channelId,
+      },
+      { headers: getAuthHeaders() }
+    );
+    return response.data; // سيعيد { message, batch_id }
+  } catch (error) {
+    console.error("API Error - startChannelCleanup:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const getAuditsHistory = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/channels/audits/history`, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error) {
+    console.error("API Error - getAuditsHistory:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export default apiClient;
