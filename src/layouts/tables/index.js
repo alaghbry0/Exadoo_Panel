@@ -1,4 +1,4 @@
-// src/layouts/tables/index.js
+// /src/layouts/tables/index.js
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom"; // ✅ 1. تم استيراد useLocation
