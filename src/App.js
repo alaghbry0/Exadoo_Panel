@@ -1,4 +1,5 @@
 // src/App.js
+
 import React, { useState, useEffect, useMemo } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
@@ -15,11 +16,22 @@ import rtlPlugin from "stylis-plugin-rtl";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import { useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "context";
-import routes from "routes"; // تأكد من استيراد المسارات
+import routes from "routes";
 import brandWhite from "assets/images/logo-ct.png";
 import brandDark from "assets/images/logo-ct-dark.png";
 import PrivateRoute from "./PrivateRoute";
 import SignIn from "layouts/authentication/sign-in";
+
+// =================================================================
+// ✅✅ الخطوة 1: استيراد دالة الإعداد الجديدة من الملف الذي أنشأناه
+import setupAxiosInterceptors from "services/setupInterceptors";
+// =================================================================
+
+// =================================================================
+// ✅✅ الخطوة 2: قم باستدعاء الدالة هنا، مرة واحدة عند تحميل التطبيق
+// هذا يضمن أن المعترضات (interceptors) جاهزة قبل عرض أي مكون.
+setupAxiosInterceptors();
+// =================================================================
 
 export default function App() {
   const [controller, dispatch] = useMaterialUIController();
@@ -67,7 +79,7 @@ export default function App() {
     document.scrollingElement.scrollTop = 0;
   }, [pathname]);
 
-  // ======= هنا أضفنا ال useEffect الخاص بالودجت =======
+  // useEffect الخاص بالودجت (يبقى كما هو)
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://alaghbry0.github.io/chat-widget/widget.min.js";
@@ -88,9 +100,8 @@ export default function App() {
       document.body.removeChild(script);
     };
   }, []);
-  // ================================================
 
-  // A-Shariki: دالة لتسطيح المسارات المتداخلة
+  // دالة تسطيح المسارات (تبقى كما هي)
   const getRoutes = (allRoutes) => {
     const flattenedRoutes = [];
     allRoutes.forEach((route) => {
@@ -114,7 +125,7 @@ export default function App() {
             color={sidenavColor}
             brand={(transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite}
             brandName="Exaado Bannel"
-            routes={routes} // هنا نمرر المسارات الأصلية للقائمة الجانبية
+            routes={routes}
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
           />
@@ -123,7 +134,6 @@ export default function App() {
       )}
       <Routes>
         <Route path="/authentication/sign-in" element={<SignIn />} />
-        {/* A-Shariki: نستخدم المسارات المسطحة هنا للراوتر */}
         {allRoutes.map((route) => (
           <Route
             key={route.key}

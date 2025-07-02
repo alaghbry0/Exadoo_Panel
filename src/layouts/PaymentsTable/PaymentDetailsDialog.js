@@ -19,7 +19,7 @@ import TabList from "@mui/lab/TabList";
 import TabPanel from "@mui/lab/TabPanel";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { format, isValid } from "date-fns"; // استيراد isValid للتحقق من صحة التاريخ
-import { formatStatus, formatAmount, copyToClipboardUtil } from "./payments.utils";
+import { formatStatus, formatAmount, copyToClipboardUtil } from "./components/payments.utils";
 
 function PaymentDetailsDialog({ open, onClose, payment, showSnackbar }) {
   const [tabValue, setTabValue] = useState("1");

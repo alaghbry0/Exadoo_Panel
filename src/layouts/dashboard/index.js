@@ -1,6 +1,6 @@
 // src/layouts/dashboard/index.js
 
-import { useState, useEffect, useMemo, useCallback } from "react"; // Added useMemo, useCallback
+import { useState, useEffect, useMemo, useCallback } from "react";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -11,10 +11,9 @@ import Skeleton from "@mui/material/Skeleton";
 import Alert from "@mui/material/Alert";
 import Chip from "@mui/material/Chip";
 import Box from "@mui/material/Box";
-import Select from "@mui/material/Select"; // MUI Select
-import MenuItem from "@mui/material/MenuItem"; // MUI MenuItem
-import FormControl from "@mui/material/FormControl"; // MUI FormControl
-// import InputLabel from "@mui/material/InputLabel"; // Optional: if you want a floating label
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import FormControl from "@mui/material/FormControl";
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -33,7 +32,42 @@ import RecentPayments from "layouts/dashboard/components/RecentPayments";
 import RecentActivities from "layouts/dashboard/components/RecentActivities";
 
 // API Services
-import { getDashboardStats, getRevenueChart, getSubscriptionsChart } from "services/api.js";
+import {
+  getDashboardStats,
+  getRevenueChart,
+  getSubscriptionsChart,
+  getSubscriptionAnalytics,
+} from "services/api.js";
+
+// Chart.js components
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler, // Important for filled line charts
+} from "chart.js";
+import { Line, Pie } from "react-chartjs-2";
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 // Constants for revenue periods
 const REVENUE_PERIODS = {
@@ -50,25 +84,29 @@ const REVENUE_PERIOD_OPTIONS = [
   { value: REVENUE_PERIODS.P12_MONTHS, label: "آخر 12 شهرًا" },
 ];
 
+// 💡 تحديث ثوابت فترة توجه النمو
+const TREND_PERIODS = {
+  DAILY: "daily",
+  WEEKLY: "weekly",
+  MONTHLY: "monthly",
+};
+
+const TREND_PERIOD_OPTIONS = [
+  { value: TREND_PERIODS.DAILY, label: "يومي (آخر 30 يوم)" },
+  { value: TREND_PERIODS.WEEKLY, label: "أسبوعي (آخر 12 أسبوع)" },
+  { value: TREND_PERIODS.MONTHLY, label: "شهري (آخر 12 شهر)" },
+];
+
 // Optimized StatCard component
 const StatCard = ({ icon, color, title, count, percentage, isLoading }) => (
   <MDBox mb={1.5}>
     {isLoading ? (
       <Card sx={{ p: 2, minHeight: 120 }}>
-        {" "}
-        {/* Ensure consistent height for skeletons */}
         <Skeleton
           variant="circular"
           width={30}
           height={30}
-          sx={{
-            mb: 1,
-            borderRadius: "0.75rem",
-            p: 0.5,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          sx={{ mb: 1, borderRadius: "0.75rem", p: 0.5 }}
         />
         <Skeleton variant="text" sx={{ fontSize: "1rem", mb: 0.5, width: "70%" }} />
         <Skeleton variant="text" sx={{ fontSize: "1.5rem", mb: 1 }} />
@@ -90,60 +128,64 @@ function Dashboard() {
   const [stats, setStats] = useState(null);
   const [revenueData, setRevenueData] = useState(null);
   const [subscriptionsData, setSubscriptionsData] = useState(null);
+  const [analyticsData, setAnalyticsData] = useState(null);
 
   const [loadingStates, setLoadingStates] = useState({
     initialDashboard: true,
     revenueChart: false,
+    analytics: true,
   });
-  const [error, setError] = useState(null); // Single error state for dashboard-wide errors
+  const [error, setError] = useState(null);
   const [revenuePeriod, setRevenuePeriod] = useState(REVENUE_PERIODS.P7_DAYS);
+  // 💡 تغيير الحالة الافتراضية لتكون يومي
+  const [trendPeriod, setTrendPeriod] = useState(TREND_PERIODS.DAILY);
 
   const handleLoading = (key, value) => setLoadingStates((prev) => ({ ...prev, [key]: value }));
 
   const loadRevenueData = useCallback(async (period, isInitialCall = false) => {
     if (!isInitialCall) handleLoading("revenueChart", true);
-    // Clear previous revenue data to show loading state properly if needed, or keep old data
-    // setRevenueData(null);
     try {
       const revenueChartData = await getRevenueChart(period);
       setRevenueData(revenueChartData);
     } catch (err) {
       console.error("Revenue data loading error:", err);
-      // Optionally set a specific error for revenue chart if needed
-      // setError(prev => ({...prev, revenueError: 'فشل تحميل مخطط الإيرادات'}));
     } finally {
       if (!isInitialCall) handleLoading("revenueChart", false);
     }
-  }, []); // No dependencies needed if getRevenueChart doesn't change
+  }, []);
 
-  const loadDashboardData = useCallback(async () => {
-    handleLoading("initialDashboard", true);
-    setError(null);
-    try {
-      const [statsData, subscriptionsChartData] = await Promise.all([
-        getDashboardStats(),
-        getSubscriptionsChart(),
-      ]);
-      setStats(statsData);
-      setSubscriptionsData(subscriptionsChartData);
-      await loadRevenueData(revenuePeriod, true); // true for initial call
-    } catch (err) {
-      setError("فشل في تحميل بيانات لوحة التحكم الرئيسية.");
-      console.error("Dashboard data loading error:", err);
-    } finally {
-      handleLoading("initialDashboard", false);
-    }
-  }, [revenuePeriod, loadRevenueData]); // Add loadRevenueData
+  const loadDashboardData = useCallback(
+    async (currentTrendPeriod) => {
+      handleLoading("initialDashboard", true);
+      handleLoading("analytics", true);
+      setError(null);
+      try {
+        const [statsData, subscriptionsChartData, analytics] = await Promise.all([
+          getDashboardStats(),
+          getSubscriptionsChart(),
+          getSubscriptionAnalytics({ trend_period: currentTrendPeriod }),
+        ]);
+        setStats(statsData);
+        setSubscriptionsData(subscriptionsChartData);
+        setAnalyticsData(analytics);
+        await loadRevenueData(revenuePeriod, true);
+      } catch (err) {
+        setError("فشل في تحميل بيانات لوحة التحكم الرئيسية.");
+        console.error("Dashboard data loading error:", err);
+      } finally {
+        handleLoading("initialDashboard", false);
+        handleLoading("analytics", false);
+      }
+    },
+    [revenuePeriod, loadRevenueData]
+  );
 
   useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]); // loadDashboardData is memoized
+    loadDashboardData(trendPeriod);
+  }, [loadDashboardData, trendPeriod]);
 
   useEffect(() => {
-    // This effect runs when revenuePeriod changes, but not on initial load
-    // as loadRevenueData is already called by loadDashboardData initially.
     if (!loadingStates.initialDashboard && stats) {
-      // Ensure initial load is complete
       loadRevenueData(revenuePeriod);
     }
   }, [revenuePeriod, stats, loadingStates.initialDashboard, loadRevenueData]);
@@ -155,7 +197,7 @@ function Dashboard() {
     return {
       labels: revenueData.map((item) => {
         const date = new Date(item.date);
-        return date.toLocaleDateString("ar-SA", {
+        return date.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
           year:
@@ -182,17 +224,93 @@ function Dashboard() {
     };
   }, [subscriptionsData]);
 
+  // 💡 تحديث useMemo الخاص بتوجه النمو ليكون أكثر ذكاءً في عرض العناوين
+  const formattedNewSubsTrend = useMemo(() => {
+    const trend = analyticsData?.new_subscriptions_trend;
+    if (!trend || !trend.data || trend.data.length === 0) {
+      return null;
+    }
+
+    // تحديد صيغة التاريخ بناءً على الفترة المختارة
+    const dateFormatOptions = {
+      [TREND_PERIODS.DAILY]: { month: "short", day: "numeric" },
+      [TREND_PERIODS.WEEKLY]: { month: "short", day: "numeric" },
+      [TREND_PERIODS.MONTHLY]: { month: "short", year: "2-digit" },
+    };
+
+    return {
+      labels: trend.data.map((d) =>
+        new Date(d.period).toLocaleDateString("en-US", dateFormatOptions[trendPeriod])
+      ),
+      datasets: [
+        {
+          label: "اشتراكات جديدة",
+          data: trend.data.map((d) => d.new_subscriptions),
+          borderColor: "rgb(54, 162, 235)",
+          backgroundColor: "rgba(54, 162, 235, 0.5)",
+          tension: 0.2,
+          fill: true,
+          pointRadius: trendPeriod === TREND_PERIODS.DAILY ? 2 : 3, // نقاط أصغر للعرض اليومي
+          pointBackgroundColor: "rgb(54, 162, 235)",
+        },
+      ],
+      details: {
+        total: trend.total,
+        growth: trend.growth,
+        // 💡 إضافة نص وصفي للفترة
+        growthLabel: {
+          [TREND_PERIODS.DAILY]: "عن اليوم السابق",
+          [TREND_PERIODS.WEEKLY]: "عن الأسبوع السابق",
+          [TREND_PERIODS.MONTHLY]: "عن الشهر السابق",
+        }[trendPeriod],
+      },
+    };
+  }, [analyticsData, trendPeriod]); // 💡 إضافة trendPeriod كاعتمادية
+
+  const formattedTypeDistribution = useMemo(() => {
+    let data = analyticsData?.type_distribution;
+    if (data && typeof data === "string") {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {
+        console.error("Failed to parse type_distribution JSON:", e);
+        return null;
+      }
+    }
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return null;
+    }
+    return {
+      labels: data.map((d) => d.type_name),
+      datasets: [
+        {
+          label: "Subscriptions by Type",
+          data: data.map((d) => d.count),
+          backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"],
+          borderWidth: 1,
+        },
+      ],
+    };
+  }, [analyticsData]);
+
   const kpiMetrics = useMemo(() => {
-    if (!stats) return [];
-    const completedPaymentsCount = stats.completed_payments || 0;
-    const totalFailedPaymentsCount = stats.total_failed_payments || 0;
+    let statsData = stats;
+    if (analyticsData?.overall_stats && typeof analyticsData.overall_stats === "string") {
+      try {
+        statsData = { ...stats, ...JSON.parse(analyticsData.overall_stats) };
+      } catch (e) {
+        console.error("Failed to parse overall_stats JSON:", e);
+      }
+    }
+    if (!statsData) return [];
+    const completedPaymentsCount = statsData.completed_payments || 0;
+    const totalFailedPaymentsCount = statsData.total_failed_payments || 0;
     const totalPaymentsAttempted = completedPaymentsCount + totalFailedPaymentsCount;
     const paymentSuccessRate =
       totalPaymentsAttempted > 0 ? (completedPaymentsCount / totalPaymentsAttempted) * 100 : 0;
-    const totalRevenueAmount = parseFloat(stats.total_revenue || 0);
+    const totalRevenueAmount = parseFloat(statsData.total_revenue || 0);
     const averageOrderValue =
       completedPaymentsCount > 0 ? totalRevenueAmount / completedPaymentsCount : 0;
-
     return [
       {
         label: "معدل نجاح المدفوعات",
@@ -225,25 +343,22 @@ function Dashboard() {
         icon: "highlight_off",
       },
     ];
-  }, [stats]);
+  }, [stats, analyticsData]);
 
   const lastUpdateTime = useMemo(
-    () => new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }),
+    () => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
     []
   );
 
-  // Skeleton for initial page load
   if (loadingStates.initialDashboard && !stats) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox py={3}>
-          {/* Welcome Skeleton */}
           <MDBox mb={3}>
             <Skeleton variant="text" width="40%" height={40} sx={{ mb: 1 }} />
             <Skeleton variant="text" width="60%" height={20} />
           </MDBox>
-          {/* Stats Cards Skeleton */}
           <Grid container spacing={3} mb={3}>
             {Array.from({ length: 4 }).map((_, i) => (
               <Grid item xs={12} sm={6} lg={3} key={`stat-skel-${i}`}>
@@ -251,7 +366,6 @@ function Dashboard() {
               </Grid>
             ))}
           </Grid>
-          {/* Charts Skeleton */}
           <Grid container spacing={3} mb={3}>
             <Grid item xs={12} lg={8}>
               <Card sx={{ p: 2, height: 350 }}>
@@ -271,7 +385,6 @@ function Dashboard() {
     );
   }
 
-  // Error display for major data load failure
   if (error && !stats) {
     return (
       <DashboardLayout>
@@ -280,7 +393,12 @@ function Dashboard() {
           <Alert
             severity="error"
             action={
-              <MDButton variant="outlined" color="error" size="small" onClick={loadDashboardData}>
+              <MDButton
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={() => loadDashboardData(trendPeriod)}
+              >
                 <Icon sx={{ mr: 1 }}>refresh</Icon>
                 إعادة المحاولة
               </MDButton>
@@ -294,7 +412,6 @@ function Dashboard() {
     );
   }
 
-  // If stats are still null after loading (shouldn't happen if error is caught)
   if (!stats)
     return (
       <DashboardLayout>
@@ -315,7 +432,6 @@ function Dashboard() {
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
-        {/* Section: Welcome & Quick Summary */}
         <MDBox mb={3}>
           <Grid container spacing={1} alignItems="center" justifyContent="space-between">
             <Grid item xs={12} md></Grid>
@@ -330,7 +446,6 @@ function Dashboard() {
           </Grid>
         </MDBox>
 
-        {/* Section: Key Performance Indicators Cards */}
         <Grid container spacing={3} mb={3}>
           <Grid item xs={12} sm={6} lg={3}>
             <StatCard
@@ -356,7 +471,6 @@ function Dashboard() {
               })}`}
               percentage={{
                 color: "success",
-                // amount: `+${(stats.revenue_growth_percentage || 0).toFixed(1)}%`, // Assuming you might have this
                 label: "الإجمالي الكلي",
               }}
               isLoading={loadingStates.initialDashboard}
@@ -369,8 +483,6 @@ function Dashboard() {
               title="الاشتراكات النشطة"
               count={stats.active_subscriptions?.toLocaleString() || "0"}
               percentage={{
-                // color: "info",
-                // amount: `+${(stats.new_subscriptions_this_month || 0)}`,
                 label: "إجمالي الاشتراكات الحالية",
               }}
               isLoading={loadingStates.initialDashboard}
@@ -378,7 +490,7 @@ function Dashboard() {
           </Grid>
           <Grid item xs={12} sm={6} lg={3}>
             <StatCard
-              icon="event_busy" // or "schedule" or "hourglass_empty"
+              icon="event_busy"
               color="warning"
               title="اشتراكات تنتهي قريبًا"
               count={stats.expiring_soon?.toLocaleString() || "0"}
@@ -390,11 +502,8 @@ function Dashboard() {
           </Grid>
         </Grid>
 
-        {/* Section: Charts (Revenue and Subscriptions) */}
         <Grid container spacing={3} mb={3}>
           <Grid item xs={12} lg={7}>
-            {" "}
-            {/* Revenue chart gets more space */}
             <Card sx={{ height: "100%" }}>
               <MDBox pt={2} px={2} mb={4}>
                 <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={1}>
@@ -404,10 +513,7 @@ function Dashboard() {
                     </MDTypography>
                   </Box>
                   <FormControl size="small" sx={{ minWidth: 150 }}>
-                    {/* <InputLabel id="revenue-period-select-label">الفترة</InputLabel> */}
                     <Select
-                      // labelId="revenue-period-select-label"
-                      // label="الفترة"
                       value={revenuePeriod}
                       onChange={(e) => setRevenuePeriod(e.target.value)}
                       sx={{ ".MuiSelect-select": { py: 1, px: 1.5 }, fontSize: "0.875rem" }}
@@ -426,8 +532,6 @@ function Dashboard() {
                 </MDBox>
               </MDBox>
               <MDBox p={1} sx={{ minHeight: 300, position: "relative" }}>
-                {" "}
-                {/* Added minHeight and relative positioning */}
                 {loadingStates.revenueChart && (
                   <MDBox
                     sx={{
@@ -446,13 +550,8 @@ function Dashboard() {
                     <CircularProgress size={40} />
                   </MDBox>
                 )}
-                {/* Render chart only if data is available, or show a message */}
                 {formattedRevenueChart.labels.length > 0 || loadingStates.revenueChart ? (
-                  <ReportsLineChart
-                    color="success"
-                    chart={formattedRevenueChart}
-                    // No need for title/description here as they are above
-                  />
+                  <ReportsLineChart color="success" chart={formattedRevenueChart} />
                 ) : (
                   <MDBox
                     display="flex"
@@ -498,11 +597,111 @@ function Dashboard() {
           </Grid>
         </Grid>
 
-        {/* Section: Detailed Metrics (KPIs) and Recent Payments */}
-        <Grid container spacing={3} mb={3}>
+        <MDBox mt={4.5}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={7} lg={8}>
+              <Card>
+                <MDBox
+                  p={2}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  flexWrap="wrap"
+                >
+                  <Box mb={{ xs: 1, sm: 0 }}>
+                    <MDTypography variant="h6">توجه نمو الاشتراكات</MDTypography>
+                    {formattedNewSubsTrend?.details && (
+                      <MDTypography variant="button" color="text" fontWeight="light">
+                        <strong>{formattedNewSubsTrend.details.total.toLocaleString()}</strong>{" "}
+                        اشتراك جديد
+                        <MDTypography
+                          component="span"
+                          variant="button"
+                          color={formattedNewSubsTrend.details.growth >= 0 ? "success" : "error"}
+                          fontWeight="bold"
+                          sx={{ ml: 1 }}
+                        >
+                          ({formattedNewSubsTrend.details.growth >= 0 ? "▲" : "▼"}
+                          {Math.abs(formattedNewSubsTrend.details.growth)}%)
+                        </MDTypography>
+                        <MDTypography
+                          component="span"
+                          variant="caption"
+                          color="text"
+                          sx={{ ml: 0.5 }}
+                        >
+                          {formattedNewSubsTrend.details.growthLabel}
+                        </MDTypography>
+                      </MDTypography>
+                    )}
+                  </Box>
+                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <Select
+                      value={trendPeriod}
+                      onChange={(e) => setTrendPeriod(e.target.value)}
+                      sx={{ ".MuiSelect-select": { py: 1 }, fontSize: "0.875rem" }}
+                    >
+                      {TREND_PERIOD_OPTIONS.map((option) => (
+                        <MenuItem
+                          key={option.value}
+                          value={option.value}
+                          sx={{ fontSize: "0.875rem" }}
+                        >
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </MDBox>
+                <MDBox p={1} sx={{ height: 300 }}>
+                  {loadingStates.analytics ? (
+                    <Skeleton variant="rectangular" height="100%" />
+                  ) : formattedNewSubsTrend ? (
+                    <Line
+                      data={formattedNewSubsTrend}
+                      options={{ responsive: true, maintainAspectRatio: false }}
+                    />
+                  ) : (
+                    <MDTypography>لا توجد بيانات.</MDTypography>
+                  )}
+                </MDBox>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={5} lg={4}>
+              <Card sx={{ height: "100%" }}>
+                <MDBox p={2}>
+                  <MDTypography variant="h6">Top Subscription Types</MDTypography>
+                </MDBox>
+                <MDBox
+                  p={1}
+                  sx={{
+                    position: "relative",
+                    height: "100%",
+                    minHeight: 300,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {loadingStates.analytics ? (
+                    <CircularProgress />
+                  ) : formattedTypeDistribution ? (
+                    <Pie
+                      data={formattedTypeDistribution}
+                      options={{ responsive: true, maintainAspectRatio: false }}
+                    />
+                  ) : (
+                    <MDTypography>No type data.</MDTypography>
+                  )}
+                </MDBox>
+              </Card>
+            </Grid>
+          </Grid>
+        </MDBox>
+
+        <Grid container spacing={3} mb={3} mt={1.5}>
           <Grid item xs={12} md={5} lg={4}>
-            {" "}
-            {/* KPI Card */}
             <Card sx={{ height: "100%" }}>
               <MDBox pt={2} px={2}>
                 <MDTypography variant="h6" fontWeight="medium">
@@ -517,7 +716,7 @@ function Dashboard() {
                       display="flex"
                       justifyContent="space-between"
                       alignItems="center"
-                      py={1.5} // Increased padding for better spacing
+                      py={1.5}
                       borderBottom={index < kpiMetrics.length - 1 ? "1px solid #f0f0f0" : "none"}
                     >
                       <MDBox display="flex" alignItems="center">
@@ -532,8 +731,8 @@ function Dashboard() {
                         label={item.value}
                         color={item.color}
                         size="small"
-                        variant="outlined" // Or "filled" for more emphasis
-                        sx={{ fontWeight: "bold", minWidth: "70px", textAlign: "center" }} // Ensure chip has min-width
+                        variant="outlined"
+                        sx={{ fontWeight: "bold", minWidth: "70px", textAlign: "center" }}
                       />
                     </MDBox>
                   ))
@@ -554,13 +753,10 @@ function Dashboard() {
           </Grid>
 
           <Grid item xs={12} md={7} lg={8}>
-            {" "}
-            {/* Recent Payments */}
             <RecentPayments />
           </Grid>
         </Grid>
 
-        {/* Section: Recent Activities */}
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <RecentActivities />

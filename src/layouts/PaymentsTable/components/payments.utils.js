@@ -1,7 +1,7 @@
 // src/layouts/payments/payments.utils.js
 import React from "react";
 import Chip from "@mui/material/Chip";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import Tooltip from "@mui/material/Tooltip";
@@ -32,18 +32,37 @@ export const formatPaymentMethod = (method) => {
 };
 
 export const formatAmount = (amount, currency = "USD") => {
-  // إضافة العملة كباراميتر اختياري
   if (amount === null || amount === undefined) return "-";
-  try {
-    return new Intl.NumberFormat("ar-SA", {
-      // يمكنك تغيير ar-SA إذا لزم الأمر
-      style: "currency",
-      currency: currency, // استخدام العملة الممررة أو الافتراضية
-    }).format(amount);
-  } catch (e) {
-    console.error("Error formatting amount:", e);
-    return `${amount} ${currency}`; // fallback
+
+  // 💡 --- التعديل هنا ---
+  // قائمة بالعملات المدعومة من Intl.NumberFormat
+  const supportedCurrencies = ["USD", "EUR", "SAR", "AED"]; // يمكنك توسيع هذه القائمة
+
+  // إذا كانت العملة مدعومة، استخدم التنسيق الكامل
+  if (supportedCurrencies.includes(currency?.toUpperCase())) {
+    try {
+      return new Intl.NumberFormat("ar-SA", {
+        style: "currency",
+        currency: currency,
+      }).format(amount);
+    } catch (e) {
+      // Fallback في حالة حدوث خطأ غير متوقع
+      return `${parseFloat(amount).toLocaleString("ar-SA")} ${currency}`;
+    }
   }
+
+  // إذا كانت العملة غير مدعومة (مثل USDT)، قم بتنسيق الرقم وأضف الرمز كنص
+  return `${parseFloat(amount).toLocaleString("ar-SA")} ${currency}`;
+};
+
+// 💡 --- أضف هذه الدالة الجديدة وقم بتصديرها ---
+export const formatDate = (dateString, formatStr = "dd MMM yyyy, HH:mm") => {
+  if (!dateString) return "—"; // استخدم شرطة طويلة للبيانات الفارغة
+
+  const date = new Date(dateString); // new Date() يمكنه تحليل صيغ ISO 8601 التي تأتي من الخادم
+
+  // تحقق من صلاحية التاريخ بعد التحليل
+  return isValid(date) ? format(date, formatStr) : "Invalid Date";
 };
 
 export const copyToClipboardUtil = (text, showSnackbarCallback) => {

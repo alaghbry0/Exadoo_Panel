@@ -9,20 +9,14 @@ import {
   Grid,
   CircularProgress,
   Alert as MuiAlert,
-  // TextField, // لا نحتاجه الآن لـ DatePicker
 } from "@mui/material";
-// لا نحتاج DatePicker أو dayjs هنا الآن
-// import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-// import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-// import dayjs from "dayjs";
-// import "dayjs/locale/ar";
 
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
 
-// API - تأكد من أن هذه الدالة تستدعي النقطة الصحيحة التي تتوقع days_to_add
-import { getSubscriptionTypes, addOrRenewSubscriptionAdmin } from "../../../services/api"; // تم تغيير اسم الدالة
+// API - تأكد من أن هذه الدالة تستدعي النقطة الصحيحة التي تتوقع payment_token
+import { getSubscriptionTypes, addOrRenewSubscriptionAdmin } from "../../../services/api";
 
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
   return (
@@ -38,15 +32,15 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
 
   const getInitialFormData = (currentUser) => ({
     telegram_id: currentUser?.telegram_id || "",
-    full_name: currentUser?.full_name || "", // سيمرر للخادم، يمكن للخادم استخدامه إذا كان المستخدم جديدًا
+    full_name: currentUser?.full_name || "",
     username: currentUser?.username
       ? currentUser.username.startsWith("@")
         ? currentUser.username
         : `@${currentUser.username}`
-      : "", // سيمرر للخادم
+      : "",
     subscription_type_id: "",
-    days_to_add: "30", // حقل جديد، وقيمة افتراضية
-    // المصدر يتم تعيينه في الخادم ("admin_manual")، لا حاجة لإرساله من هنا
+    days_to_add: "30",
+    payment_token: "", // <-- [تعديل 1]: إضافة حقل رمز الدفع إلى الحالة
   });
 
   const [formData, setFormData] = useState(getInitialFormData(user));
@@ -55,7 +49,6 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
     if (open) {
       setError(null);
       fetchSubscriptionTypes();
-      // تحديث formData بمعلومات المستخدم عند فتح الـ dialog
       setFormData(getInitialFormData(user));
     }
   }, [open, user]);
@@ -97,15 +90,20 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
     setError(null);
 
     try {
-      // البيانات التي سترسل إلى الخادم
+      // <-- [تعديل 2]: بناء البيانات التي سترسل للخادم وتضمين payment_token بشكل شرطي
       const submissionData = {
-        telegram_id: formData.telegram_id, // من المستخدم الممرر
-        full_name: formData.full_name, // اختياري، للخادم
-        username: formData.username, // اختياري، للخادم
+        telegram_id: formData.telegram_id,
+        full_name: formData.full_name,
+        username: formData.username,
         subscription_type_id: formData.subscription_type_id,
         days_to_add: daysToAddNum,
       };
-      // استدعاء الدالة المحدثة في api.js
+
+      // أضف التوكن فقط إذا كان يحتوي على قيمة
+      if (formData.payment_token && formData.payment_token.trim() !== "") {
+        submissionData.payment_token = formData.payment_token.trim();
+      }
+
       await addOrRenewSubscriptionAdmin(submissionData);
       if (onSuccess) onSuccess();
       onClose();
@@ -122,7 +120,6 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
     }
   };
 
-  // لا نحتاج LocalizationProvider هنا بعد إزالة DatePicker
   return (
     <Dialog
       open={open}
@@ -141,6 +138,7 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
       <DialogContent sx={{ p: 3 }}>
         {error && <CustomAlert severity="error">{error}</CustomAlert>}
         <Grid container spacing={3}>
+          {/* الحقول الحالية تبقى كما هي */}
           <Grid item xs={12}>
             <MDInput
               label="معرف تلجرام"
@@ -153,22 +151,22 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
           </Grid>
           <Grid item xs={12}>
             <MDInput
-              label="الاسم الكامل (اختياري إذا كان المستخدم موجودًا)"
+              label="الاسم الكامل (اختياري)"
               name="full_name"
               fullWidth
               value={formData.full_name}
-              onChange={handleChange} // اسمح بتعديله إذا أراد المسؤول تحديثه
-              InputLabelProps={{ shrink: !!formData.full_name }} // أضف shrink إذا كان هناك قيمة
+              onChange={handleChange}
+              InputLabelProps={{ shrink: !!formData.full_name }}
             />
           </Grid>
           <Grid item xs={12}>
             <MDInput
-              label="اسم المستخدم (اختياري إذا كان المستخدم موجودًا)"
+              label="اسم المستخدم (اختياري)"
               name="username"
               fullWidth
               value={formData.username}
-              onChange={handleChange} // اسمح بتعديله
-              InputLabelProps={{ shrink: !!formData.username }} // أضف shrink إذا كان هناك قيمة
+              onChange={handleChange}
+              InputLabelProps={{ shrink: !!formData.username }}
             />
           </Grid>
           <Grid item xs={12}>
@@ -230,7 +228,7 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
             <MDInput
               label="عدد أيام الإضافة/التجديد"
               name="days_to_add"
-              type="number" // تغيير النوع إلى number
+              type="number"
               fullWidth
               value={formData.days_to_add}
               onChange={handleChange}
@@ -243,10 +241,23 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
                   : ""
               }
               InputLabelProps={{ shrink: true }}
-              inputProps={{ min: 1 }} // لمتصفحات HTML5
+              inputProps={{ min: 1 }}
             />
           </Grid>
-          {/* لم نعد بحاجة لحقل المصدر هنا، الخادم سيعينه */}
+
+          {/* <-- [تعديل 3]: إضافة حقل إدخال لرمز الدفع --> */}
+          <Grid item xs={12}>
+            <MDInput
+              label="رمز الدفع"
+              name="payment_token"
+              fullWidth
+              value={formData.payment_token}
+              onChange={handleChange}
+              disabled={loading}
+              InputLabelProps={{ shrink: true }}
+              helperText="عنوان مذكرة الدفعه الفاشلة ان وجد"
+            />
+          </Grid>
         </Grid>
       </DialogContent>
 
@@ -259,7 +270,7 @@ const AddSubscriptionDialog = ({ open, onClose, user, onSuccess }) => {
           color="info"
           variant="gradient"
           disabled={loading || typesLoading}
-          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null} // غيرت لون الدائرة لـ inherit
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
         >
           {loading ? "جاري التنفيذ..." : "إضافة/تجديد الاشتراك"}
         </MDButton>

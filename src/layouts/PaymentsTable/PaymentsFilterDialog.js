@@ -1,5 +1,6 @@
 // src/layouts/payments/PaymentsFilterDialog.js
-import React from "react";
+
+import React, { useState, useEffect } from "react";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -16,33 +17,50 @@ import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import MDTypography from "components/MDTypography";
 import Chip from "@mui/material/Chip";
-import FormGroup from "@mui/material/FormGroup"; // For better layout of chips
-import FormControlLabel from "@mui/material/FormControlLabel"; // For potential checkboxes in future
-import Switch from "@mui/material/Switch"; // Alternative to chips for toggling
+import FormGroup from "@mui/material/FormGroup";
+
+// 💡 استيراد DatePicker
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 
 import {
-  // إذا كنت تستخدم أسماء مميزة للخيارات في config
-  // STATUS_OPTIONS_FOR_DIALOG as STATUS_OPTIONS,
-  // PAYMENT_METHOD_OPTIONS_FOR_DIALOG as PAYMENT_METHOD_OPTIONS,
-  // أو الأسماء العادية إذا كانت هي نفسها
   STATUS_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
-  BASE_COLUMNS_CONFIG, // هذا هو المهم لقائمة الأعمدة
-} from "./payments.config"; // تأكد من أن المسار صحيح وأنك تصدر الخيارات المستخدمة
+  BASE_COLUMNS_CONFIG,
+  INITIAL_FILTERS,
+} from "./payments.config";
 
 function PaymentsFilterDialog({
   open,
   onClose,
   filters,
-  onFilterChange,
   visibleColumns,
   onColumnVisibilityChange,
   onApply,
   onReset,
 }) {
-  // الأعمدة التي يمكن للمستخدم التحكم في ظهورها هي تلك الموجودة في BASE_COLUMNS_CONFIG
-  // ما لم يكن هناك أعمدة لا تريد أن يتحكم المستخدم في ظهورها (مثل عمود الإجراءات)
-  const toggleableColumns = BASE_COLUMNS_CONFIG.map((col) => col.accessor);
+  const [localFilters, setLocalFilters] = useState(filters);
+
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters, open]); // Reset local state when dialog opens or parent filters change
+
+  const handleFilterChange = (event) => {
+    const { name, value } = event.target;
+    setLocalFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleDateChange = (field, value) => {
+    setLocalFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleInternalApply = () => {
+    onApply(localFilters);
+  };
+
+  const handleInternalReset = () => {
+    setLocalFilters(INITIAL_FILTERS); // Reset local state
+    onReset(); // Call parent's reset logic which also closes the dialog
+  };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -67,19 +85,15 @@ function PaymentsFilterDialog({
               <Select
                 labelId="status-label-dialog"
                 name="status"
-                value={filters.status || "all"}
+                value={localFilters.status || "all"}
                 label="الحالة"
-                onChange={onFilterChange}
+                onChange={handleFilterChange}
               >
-                {STATUS_OPTIONS.map(
-                  (
-                    option // استخدم STATUS_OPTIONS
-                  ) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {STATUS_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
@@ -89,44 +103,33 @@ function PaymentsFilterDialog({
               <Select
                 labelId="payment-method-label-dialog"
                 name="payment_method"
-                value={filters.payment_method || "all"}
+                value={localFilters.payment_method || "all"}
                 label="طريقة الدفع"
-                onChange={onFilterChange}
+                onChange={handleFilterChange}
               >
-                {PAYMENT_METHOD_OPTIONS.map(
-                  (
-                    option // استخدم PAYMENT_METHOD_OPTIONS
-                  ) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  )
-                )}
+                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
+          {/* 💡 استخدام DatePicker من MUI X */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="من تاريخ"
-              name="date_from"
-              type="date"
-              value={filters.date_from || ""}
-              onChange={onFilterChange}
-              InputLabelProps={{ shrink: true }}
-              size="small"
+            <DatePicker
+              label="من تاريخ الإنشاء"
+              value={localFilters.start_date || null}
+              onChange={(date) => handleDateChange("start_date", date)}
+              renderInput={(params) => <TextField {...params} fullWidth size="small" />}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="إلى تاريخ"
-              name="date_to"
-              type="date"
-              value={filters.date_to || ""}
-              onChange={onFilterChange}
-              InputLabelProps={{ shrink: true }}
-              size="small"
+            <DatePicker
+              label="إلى تاريخ الإنشاء"
+              value={localFilters.end_date || null}
+              onChange={(date) => handleDateChange("end_date", date)}
+              renderInput={(params) => <TextField {...params} fullWidth size="small" />}
             />
           </Grid>
         </Grid>
@@ -138,7 +141,6 @@ function PaymentsFilterDialog({
           <Grid container spacing={1}>
             {BASE_COLUMNS_CONFIG.map(
               (columnConfig) =>
-                // لا نعرض عادة خيار التحكم في عمود "الإجراءات"
                 columnConfig.accessor !== "actions" && (
                   <Grid item xs={12} sm={6} md={4} key={columnConfig.accessor}>
                     <Chip
@@ -148,21 +150,7 @@ function PaymentsFilterDialog({
                       variant={visibleColumns[columnConfig.accessor] ? "filled" : "outlined"}
                       onClick={() => onColumnVisibilityChange(columnConfig.accessor)}
                       sx={{ width: "100%", justifyContent: "space-between" }}
-                      // يمكنك استخدام Switch بدلاً من Chip إذا كنت تفضل ذلك
-                      // deleteIcon={visibleColumns[columnConfig.accessor] ? <VisibilityIcon /> : <VisibilityOffIcon />}
                     />
-                    {/* مثال لاستخدام Switch بدلاً من Chip
-                    <FormControlLabel
-                    control={
-                        <Switch
-                        checked={!!visibleColumns[columnConfig.accessor]}
-                        onChange={() => onColumnVisibilityChange(columnConfig.accessor)}
-                        name={columnConfig.accessor}
-                        />
-                    }
-                    label={columnConfig.Header}
-                    />
-                    */}
                   </Grid>
                 )
             )}
@@ -170,12 +158,12 @@ function PaymentsFilterDialog({
         </FormGroup>
       </DialogContent>
       <DialogActions sx={{ p: "16px 24px" }}>
-        <Button onClick={onReset} color="secondary">
-          إعادة تعيين الفلاتر
+        <Button onClick={handleInternalReset} color="secondary">
+          إعادة تعيين الكل
         </Button>
-        <Box sx={{ flex: "1 1 auto" }} /> {/* لدفع الأزرار التالية إلى اليمين */}
+        <Box sx={{ flex: "1 1 auto" }} />
         <Button onClick={onClose}>إلغاء</Button>
-        <Button onClick={onApply} color="primary" variant="contained">
+        <Button onClick={handleInternalApply} color="primary" variant="contained">
           تطبيق
         </Button>
       </DialogActions>

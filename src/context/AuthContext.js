@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAuthToken, refreshAuthToken, removeAuthToken } from "services/api";
+import { getAuthToken, refreshAuthToken, removeAuthToken } from "services/authService";
 
 export const AuthContext = createContext();
 

@@ -1,5 +1,6 @@
 // src/layouts/Users/components/UserDetailsDialog.jsx
-import React, { useState, useMemo } from "react"; // Added useMemo
+import React, { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogTitle as MuiDialogTitle,
@@ -11,9 +12,9 @@ import {
   Tooltip,
   Snackbar,
   useTheme,
-  Paper, // For table container
-  Box, // For flexible layouts
-  Chip, // For status badges
+  Paper,
+  Box,
+  Chip,
 } from "@mui/material";
 import {
   Close,
@@ -24,12 +25,12 @@ import {
   SubscriptionsOutlined,
   ErrorOutline,
   CheckCircleOutline,
-  CalendarToday, // For date icon
-  AttachMoney, // For amount icon
-  CreditCard, // For payment method icon
-  VerifiedUser, // For status icon
-  Category, // For type icon
-  Source, // For source icon
+  CalendarToday,
+  AttachMoney,
+  CreditCard,
+  VerifiedUser,
+  Category,
+  Source,
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -39,13 +40,13 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import MDAvatar from "components/MDAvatar";
-import MDBadge from "components/MDBadge"; // Keep for overall status badge if needed
+import MDBadge from "components/MDBadge";
 
 // Helper to format dates
 const formatDate = (dateString, time = true) => {
   if (!dateString) return "N/A";
   try {
-    const formatString = time ? "P p" : "P"; // P for localized date, p for localized time
+    const formatString = time ? "P p" : "P";
     return format(new Date(dateString), formatString, { locale: ar });
   } catch (error) {
     console.warn("Date formatting error:", error);
@@ -64,8 +65,8 @@ const getInitials = (name) => {
   return "?";
 };
 
-// --- بداية: مكون MiniTable لتحسين عرض الجداول ---
-const MiniTable = ({ columns, data, emptyMessage = "لا توجد بيانات لعرضها." }) => {
+// MiniTable Component with onRowClick support
+const MiniTable = ({ columns, data, emptyMessage, onRowClick }) => {
   const theme = useTheme();
 
   if (!data || data.length === 0) {
@@ -84,7 +85,7 @@ const MiniTable = ({ columns, data, emptyMessage = "لا توجد بيانات �
       sx={{
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: theme.shape.borderRadius,
-        overflow: "hidden", // For rounded corners on table
+        overflow: "hidden",
         mt: 1,
       }}
     >
@@ -95,9 +96,9 @@ const MiniTable = ({ columns, data, emptyMessage = "لا توجد بيانات �
           borderBottom: `1px solid ${theme.palette.divider}`,
           backgroundColor:
             theme.palette.mode === "light" ? theme.palette.grey[100] : theme.palette.grey[800],
-          position: "sticky", // Make header sticky
-          top: 0, // Stick to the top of its scroll container
-          zIndex: 1, // Ensure it's above the content
+          position: "sticky",
+          top: 0,
+          zIndex: 1,
         }}
       >
         {columns.map((col) => (
@@ -123,11 +124,13 @@ const MiniTable = ({ columns, data, emptyMessage = "لا توجد بيانات �
         {data.map((row, rowIndex) => (
           <MDBox
             key={rowIndex}
+            onClick={() => onRowClick && onRowClick(row)}
             sx={{
               display: "grid",
               gridTemplateColumns: columns.map((col) => col.width || "1fr").join(" "),
               borderBottom:
                 rowIndex < data.length - 1 ? `1px solid ${theme.palette.divider}` : "none",
+              cursor: onRowClick ? "pointer" : "default",
               "&:hover": {
                 backgroundColor: theme.palette.action.hover,
               },
@@ -147,8 +150,8 @@ const MiniTable = ({ columns, data, emptyMessage = "لا توجد بيانات �
                       : "none",
                   wordBreak: "break-word",
                   whiteSpace: "normal",
-                  display: "flex", // For centering content if needed
-                  alignItems: "center", // For centering content if needed
+                  display: "flex",
+                  alignItems: "center",
                   justifyContent:
                     col.align === "center"
                       ? "center"
@@ -168,10 +171,10 @@ const MiniTable = ({ columns, data, emptyMessage = "لا توجد بيانات �
     </Paper>
   );
 };
-// --- نهاية: مكون MiniTable ---
 
 const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscription }) => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [copySuccess, setCopySuccess] = useState("");
 
   const handleCopy = (textToCopy, fieldName) => {
@@ -187,7 +190,40 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
 
   const handleCloseSnackbar = () => setCopySuccess("");
 
-  // --- بداية: تعريف الأعمدة للجداول ---
+  const handlePaymentRowClick = (payment) => {
+    if (!payment || !payment.payment_token) {
+      console.warn("Cannot navigate: Payment or payment_token is missing.");
+      return;
+    }
+    const searchParams = new URLSearchParams({
+      search: payment.payment_token,
+    });
+
+    // تأكد من أن هذا المسار `/payments` يطابق المسار في ملف routes.js
+    const finalUrl = `/PaymentsTable?${searchParams.toString()}`;
+    console.log("Navigating to payments:", finalUrl);
+    onClose();
+    navigate(finalUrl);
+  };
+
+  const handleSubscriptionRowClick = (subscription) => {
+    // لم نعد نعتمد على telegram_id من الاشتراك، بل من المستخدم الرئيسي
+    if (!user || !user.telegram_id) {
+      console.warn("Cannot navigate: Main user object or its telegram_id is missing.");
+      return;
+    }
+
+    const searchParams = new URLSearchParams({
+      search: user.telegram_id.toString(), // ⬅️ استخدام user.telegram_id
+    });
+
+    const finalUrl = `/tables?${searchParams.toString()}`;
+    console.log("Navigating to subscriptions (using main user ID):", finalUrl);
+    onClose();
+    navigate(finalUrl);
+  };
+
+  // Column Definitions
   const paymentColumns = useMemo(
     () => [
       { Header: "المعرف", accessor: "id", align: "right", width: "0.5fr" },
@@ -299,7 +335,6 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
     ],
     []
   );
-  // --- نهاية: تعريف الأعمدة للجداول ---
 
   // Section Wrapper Component
   const SectionWrapper = ({ title, titleIcon, children, noBorder = false, ...props }) => (
@@ -308,7 +343,7 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
       bgColor="transparent"
       borderRadius="lg"
       p={{ xs: 1.5, sm: 2 }}
-      mb={2.5} // Increased margin bottom
+      mb={2.5}
       sx={{
         border: noBorder ? "none" : `1px solid ${theme.palette.divider}`,
         ...props.sx,
@@ -319,13 +354,13 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
         <MDBox
           display="flex"
           alignItems="center"
-          mb={1.5} // Adjusted margin
-          pb={titleIcon ? 1 : 0.5} // Adjust padding based on icon presence
+          mb={1.5}
+          pb={titleIcon ? 1 : 0.5}
           borderBottom={titleIcon ? `1px solid ${theme.palette.divider}` : "none"}
         >
           {titleIcon &&
             React.cloneElement(titleIcon, {
-              sx: { mr: 1, color: "info.main", fontSize: "1.3rem" }, // Slightly larger icon
+              sx: { mr: 1, color: "info.main", fontSize: "1.3rem" },
             })}
           <MDTypography variant="h6" fontWeight="medium" color="textPrimary">
             {title}
@@ -336,13 +371,13 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
     </MDBox>
   );
 
-  // Data Row Component - Refined for better alignment and readability
+  // Data Row Component
   const DataRow = ({ label, value, onCopy, copyValue, sx, valueVariant = "body2" }) => (
     <MDBox display="flex" justifyContent="space-between" alignItems="flex-start" py={0.85} sx={sx}>
       <MDTypography
         variant="caption"
         color="textSecondary"
-        fontWeight="regular" // Changed from bold
+        fontWeight="regular"
         sx={{ minWidth: { xs: "90px", sm: "120px" }, mr: 1, lineHeight: 1.6 }}
       >
         {label}:
@@ -352,13 +387,13 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
       >
         <MDTypography
           variant={valueVariant}
-          fontWeight="regular" // Changed from medium
+          fontWeight="regular"
           color="textPrimary"
           sx={{
-            wordBreak: "break-all", // Allow long words to break
+            wordBreak: "break-all",
             textAlign: "right",
             lineHeight: 1.6,
-            whiteSpace: typeof value === "string" && value.length > 50 ? "normal" : "nowrap", // Allow wrapping for long strings
+            whiteSpace: typeof value === "string" && value.length > 50 ? "normal" : "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
           }}
@@ -380,7 +415,7 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
             </MDTypography>
           )}
         </MDTypography>
-        {onCopy && value && (typeof value === "string" || typeof value === "number") && (
+        {onCopy && (typeof value === "string" || typeof value === "number") && (
           <Tooltip title="نسخ" placement="top">
             <IconButton
               size="small"
@@ -404,7 +439,7 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
         fullWidth
         scroll="paper"
         dir="rtl"
-        PaperProps={{ sx: { maxHeight: "95vh", borderRadius: "lg", overflowY: "hidden" } }} // borderRadius lg
+        PaperProps={{ sx: { maxHeight: "95vh", borderRadius: "lg", overflowY: "hidden" } }}
       >
         <MuiDialogTitle
           sx={{
@@ -416,8 +451,6 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
         >
           <MDBox display="flex" justifyContent="space-between" alignItems="center">
             <MDTypography variant="h5" fontWeight="bold" color="dark">
-              {" "}
-              {/* h5 for more prominence */}
               تفاصيل المستخدم
             </MDTypography>
             <IconButton
@@ -425,7 +458,7 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
               color="inherit"
               onClick={onClose}
               aria-label="إغلاق"
-              sx={{ mr: -1 }} // Adjusted margin
+              sx={{ mr: -1 }}
             >
               <Close />
             </IconButton>
@@ -433,11 +466,11 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
         </MuiDialogTitle>
 
         <MuiDialogContent
-          dividers={false} // Remove internal dividers, use SectionWrapper border
+          dividers={false}
           sx={{
             p: { xs: 1.5, sm: 2 },
-            backgroundColor: theme.palette.background.default, // Lighter background
-            overflowY: "auto", // Ensure content itself is scrollable
+            backgroundColor: theme.palette.background.default,
+            overflowY: "auto",
           }}
         >
           {loading ? (
@@ -476,17 +509,15 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
             </MDBox>
           ) : user ? (
             <Box>
-              {" "}
-              {/* Changed from <> to Box to allow sx if needed */}
               {/* User Header Info */}
               <MDBox
                 display="flex"
-                flexDirection={{ xs: "column", sm: "row" }} // Stack on small screens
+                flexDirection={{ xs: "column", sm: "row" }}
                 alignItems={{ xs: "center", sm: "flex-start" }}
-                textAlign={{ xs: "center", sm: "right" }} // Text align for header
+                textAlign={{ xs: "center", sm: "right" }}
                 mb={3}
                 p={2}
-                borderRadius="lg" // Use 'lg' from theme
+                borderRadius="lg"
                 sx={{
                   background: `linear-gradient(135deg, ${theme.palette.info.light} 0%, ${theme.palette.info.main} 100%)`,
                   color: theme.palette.info.contrastText,
@@ -496,11 +527,11 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
                 <MDAvatar
                   src={user.profile_photo_url || undefined}
                   alt={user.full_name || user.username}
-                  size="xl" // Larger avatar
+                  size="xl"
                   shadow="md"
                   sx={{
-                    mr: { sm: 2.5 }, // Margin right on sm and up
-                    mb: { xs: 1.5, sm: 0 }, // Margin bottom on xs only
+                    mr: { sm: 2.5 },
+                    mb: { xs: 1.5, sm: 0 },
                     bgcolor: "rgba(255,255,255,0.2)",
                     color: "white",
                     border: `2px solid ${theme.palette.info.contrastText}`,
@@ -525,7 +556,7 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
                         <CheckCircleOutline
                           sx={{
                             fontSize: "1.2rem",
-                            color: theme.palette.success.light, // Brighter green
+                            color: theme.palette.success.light,
                             ml: 0.75,
                             verticalAlign: "middle",
                           }}
@@ -563,8 +594,6 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
               </MDBox>
               <SectionWrapper title="المعلومات الأساسية" titleIcon={<PersonOutline />}>
                 <Grid container columnSpacing={{ xs: 1, sm: 2.5 }} rowSpacing={{ xs: 0, sm: 0.5 }}>
-                  {" "}
-                  {/* Reduced row spacing */}
                   <Grid item xs={12} md={6}>
                     <DataRow label="تاريخ التسجيل" value={formatDate(user.created_at, true)} />
                   </Grid>
@@ -677,6 +706,7 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
                   columns={paymentColumns}
                   data={user.recent_payments || []}
                   emptyMessage="لا توجد مدفوعات مسجلة لهذا المستخدم."
+                  onRowClick={handlePaymentRowClick}
                 />
               </SectionWrapper>
               <SectionWrapper
@@ -689,6 +719,7 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
                     (a, b) => new Date(b.expiry_date) - new Date(a.expiry_date)
                   )}
                   emptyMessage="لا توجد اشتراكات لهذا المستخدم."
+                  onRowClick={handleSubscriptionRowClick}
                 />
               </SectionWrapper>
             </Box>
@@ -712,47 +743,48 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
           sx={{
             p: { xs: 1.5, sm: 2 },
             borderTop: `1px solid ${theme.palette.divider}`,
-            backgroundColor: theme.palette.background.paper, // Consistent background
+            backgroundColor: theme.palette.background.paper,
             display: "flex",
-            justifyContent: "space-between", // Space out buttons
+            justifyContent: "space-between",
           }}
         >
           <MDButton onClick={onClose} color="secondary" variant="text">
             إغلاق
           </MDButton>
-          {user &&
-            !loading &&
-            !error && ( // Only show if user data is loaded and no error
-              <MDButton
-                onClick={onAddSubscription}
-                color="info"
-                variant="gradient"
-                startIcon={<Add />}
-                sx={{ boxShadow: theme.shadows[2], "&:hover": { boxShadow: theme.shadows[4] } }}
-              >
-                إضافة اشتراك
-              </MDButton>
-            )}
+          {user && !loading && !error && (
+            <MDButton
+              onClick={onAddSubscription}
+              color="info"
+              variant="gradient"
+              startIcon={<Add />}
+              sx={{ boxShadow: theme.shadows[2], "&:hover": { boxShadow: theme.shadows[4] } }}
+            >
+              إضافة اشتراك
+            </MDButton>
+          )}
         </MuiDialogActions>
       </Dialog>
 
       <Snackbar
         open={!!copySuccess}
-        autoHideDuration={2500} // Slightly longer
+        autoHideDuration={2500}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        ContentProps={{
-          sx: {
-            backgroundColor: theme.palette.success.main, // Use theme color
+      >
+        <MDBox
+          display="flex"
+          alignItems="center"
+          color="white"
+          sx={{
+            backgroundColor: theme.palette.success.main,
             color: theme.palette.success.contrastText,
             textAlign: "center",
-            borderRadius: "sm", // Rounded snackbar
+            borderRadius: "sm",
             boxShadow: theme.shadows[3],
-          },
-        }}
-        // message={copySuccess} // Removed to use Alert for icon
-      >
-        <MDBox display="flex" alignItems="center" color="white">
+            p: 1.5,
+            pr: 2,
+          }}
+        >
           <CheckCircleOutline sx={{ mr: 1, fontSize: "1.2rem" }} />
           <MDTypography variant="button" fontWeight="medium" color="inherit">
             {copySuccess}

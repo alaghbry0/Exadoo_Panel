@@ -1,5 +1,8 @@
 // src/layouts/tables/index.js
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom"; // ✅ 1. تم استيراد useLocation
+import debounce from "lodash.debounce"; // استيراد Debounce لتحسين البحث
 import { Card, CircularProgress, Snackbar, IconButton, Tooltip, Grid } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
@@ -13,35 +16,39 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
 // Hooks
 import { useSubscriptions } from "./hooks/useSubscriptions";
-import { usePendingSubscriptions } from "./hooks/usePendingSubscriptions";
-import { useLegacySubscriptions } from "./hooks/useLegacySubscriptions";
-// import { useSnackbar } from "./hooks/useSnackbar"; // إذا كنت قد أنشأت hook مخصص
+import { useSubscriptionHistory } from "./hooks/useSubscriptionHistory";
 
 // Components
 import TabsManager from "./components/TabsManager";
 import SubscriptionFormModal from "./components/SubscriptionFormModal";
 import CustomAlert from "./components/common/CustomAlert";
-import BulkProcessResultModal from "./components/BulkProcessResultModal";
 import SubscriptionsTabContent from "./components/SubscriptionsTabContent";
-import PendingTabContent from "./components/PendingTabContent";
-import LegacyTabContent from "./components/LegacyTabContent";
+import SubscriptionHistoryTabContent from "./components/SubscriptionHistoryTabContent";
 
-// API - تأكد من تحديث هذه الاستيرادات
+// API
 import {
-  getSubscriptionTypes,
-  getSubscriptionSources, // قد لا تحتاجها إذا كان المصدر يُدار بشكل مختلف
-  addOrRenewSubscriptionAdmin, // اسم محدث
-  updateSubscriptionAdmin, // اسم محدث (يفترض وجود نقطة PUT)
-  // cancelSubscriptionAdmin سيتم استيرادها واستخدامها داخل SubscriptionsTabContent
+  getSubscriptionsMeta,
+  addOrRenewSubscriptionAdmin,
+  updateSubscriptionAdmin,
 } from "services/api";
 
 function Tables() {
+  const location = useLocation(); // ✅ 2. تهيئة useLocation
+
+  // دالة مساعدة لقراءة قيمة من search params
+  const getSearchParam = (paramName) => {
+    const params = new URLSearchParams(location.search);
+    return params.get(paramName) || "";
+  };
+
   const [activeTab, setActiveTab] = useState(0);
   const [formModalOpen, setFormModalOpen] = useState(false);
-  const [formModalMode, setFormModalMode] = useState("add_or_renew"); // "add_or_renew" أو "edit_existing"
+  const [formModalMode, setFormModalMode] = useState("add_or_renew");
   const [editingSubscription, setEditingSubscription] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
-  const [globalSearchTerm, setGlobalSearchTerm] = useState("");
+
+  // ✅ 3. تهيئة globalSearchTerm بالقيمة من الرابط
+  const [globalSearchTerm, setGlobalSearchTerm] = useState(() => getSearchParam("search"));
 
   const showSnackbar = useCallback((message, severity = "info") => {
     setSnackbar({ open: true, message, severity });
@@ -52,7 +59,7 @@ function Tables() {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
-  // --- Hooks for Tabs ---
+  // --- Hook for Subscriptions Tab (Tab 0) ---
   const {
     subscriptions,
     loading: subsLoading,
@@ -60,123 +67,84 @@ function Tables() {
     setError: setSubsError,
     tableQueryOptions: subsQueryOptions,
     setTableQueryOptions: setSubsQueryOptions,
-    totalRecords: subsTotalRecords,
+    pagination: subsPagination,
+    statistics: subsStatistics,
     customFilters: subsCustomFilters,
     handleCustomFilterChange: handleSubsCustomFilterChange,
-    setSearchTerm: setSubsSearchTerm,
-    fetchData: fetchSubscriptionsDataHook, // افترض أن hook useSubscriptions يعرض دالة fetchData
-  } = useSubscriptions(showSnackbar, globalSearchTerm);
+    fetchData: fetchSubscriptionsDataHook,
+  } = useSubscriptions(showSnackbar, globalSearchTerm); // ✅ 4. تم تمرير globalSearchTerm
 
+  // --- Hook for Subscription History Tab (Tab 1) ---
   const {
-    pendingData,
-    loading: pendingLoadingState,
-    error: pendingError,
-    setError: setPendingError,
-    tableQueryOptions: pendingQueryOptions,
-    setTableQueryOptions: setPendingQueryOptions,
-    totalRecords: pendingTotalRecords,
-    stats: pendingStatsData,
-    statusFilter: pendingStatusFilter,
-    handleStatusFilterChange: handlePendingStatusFilterChange,
-    setSearchTerm: setPendingSearchTerm,
-    handleMarkComplete: handlePendingMarkCompleteInternal,
-    bulkProcessingLoading,
-    bulkProcessResult,
-    bulkResultModalOpen,
-    handleBulkProcess: handlePendingBulkProcessInternal,
-    handleCloseBulkResultModal,
-    fetchStats: fetchPendingStatsHook,
-    fetchData: fetchPendingDataHook, // افترض أن hook usePendingSubscriptions يعرض دالة fetchData
-  } = usePendingSubscriptions(showSnackbar, globalSearchTerm);
-
-  const {
-    legacyData,
-    loading: legacyLoadingState,
-    error: legacyError,
-    setError: setLegacyError,
-    tableQueryOptions: legacyQueryOptions,
-    setTableQueryOptions: setLegacyQueryOptions,
-    totalRecords: legacyTotalRecords,
-    processedLegacyCount,
-    processedFilter: legacyProcessedFilter,
-    handleProcessedFilterChange: handleLegacyProcessedFilterChange,
-    setSearchTerm: setLegacySearchTerm,
-    fetchData: fetchLegacyDataHook,
-  } = useLegacySubscriptions(showSnackbar, globalSearchTerm);
+    historyData,
+    loading: historyLoading,
+    error: historyError,
+    setError: setHistoryError,
+    tableQueryOptions: historyQueryOptions,
+    setTableQueryOptions: setHistoryQueryOptions,
+    pagination: historyPagination,
+    customFilters: historyCustomFilters,
+    handleCustomFilterChange: handleHistoryCustomFilterChange,
+    fetchData: fetchHistoryDataHook,
+  } = useSubscriptionHistory(showSnackbar, globalSearchTerm); // ✅ 4. تم تمرير globalSearchTerm
 
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
-  const [availableSources, setAvailableSources] = useState([]); // لا تزال مفيدة إذا كان التعديل يسمح باختيار المصدر
+  const [subscriptionPlans, setSubscriptionPlans] = useState([]);
+  const [availableSources, setAvailableSources] = useState([]);
 
   useEffect(() => {
-    const fetchInitialDropdownData = async () => {
+    const fetchFilterMetadata = async () => {
       try {
-        const typesData = await getSubscriptionTypes();
-        setSubscriptionTypes(typesData || []);
-        const sourcesData = await getSubscriptionSources();
-        const formattedSources = (sourcesData || []).map((s) => ({
-          value: typeof s === "string" ? s : s.name,
-          label: typeof s === "string" ? s : s.name,
-        }));
-        setAvailableSources(formattedSources);
+        const metaData = await getSubscriptionsMeta();
+        setSubscriptionTypes(metaData.subscription_types || []);
+        setSubscriptionPlans(metaData.subscription_plans || []);
+        setAvailableSources(metaData.available_sources || []);
       } catch (err) {
-        showSnackbar("Error fetching dropdown data: " + (err.message || "Unknown error"), "error");
+        showSnackbar("Error fetching filter data: " + (err.message || "Unknown error"), "error");
       }
     };
-    fetchInitialDropdownData();
+    fetchFilterMetadata();
   }, [showSnackbar]);
 
+  // ✅ 5. useEffect لمزامنة التغييرات في الرابط مع حالة البحث
   useEffect(() => {
-    // Update search term for the active tab when global search changes
-    if (activeTab === 0) setSubsSearchTerm(globalSearchTerm);
-    else if (activeTab === 1) setPendingSearchTerm(globalSearchTerm);
-    else if (activeTab === 2) setLegacySearchTerm(globalSearchTerm);
-  }, [activeTab, globalSearchTerm, setSubsSearchTerm, setPendingSearchTerm, setLegacySearchTerm]);
+    const newSearch = getSearchParam("search");
+    // إذا كانت قيمة البحث الجديدة مختلفة عن الحالية
+    if (newSearch !== globalSearchTerm) {
+      // إذا كان هناك بحث جديد قادم من الخارج، انتقل إلى التبويب الأول (الاشتراكات النشطة)
+      if (newSearch) {
+        setActiveTab(0);
+      }
+      setGlobalSearchTerm(newSearch);
+    }
+  }, [location.search]); // يعتمد على تغييرات الرابط
 
+  // --- دالة بحث محسّنة باستخدام debounce ---
   const handleGlobalSearchChange = useCallback(
-    (value) => {
+    debounce((value) => {
       setGlobalSearchTerm(value);
-      // Reset page to 1 for the active tab on new search
-      if (activeTab === 0) setSubsQueryOptions((prev) => ({ ...prev, page: 1 }));
-      else if (activeTab === 1) setPendingQueryOptions((prev) => ({ ...prev, page: 1 }));
-      else if (activeTab === 2) setLegacyQueryOptions((prev) => ({ ...prev, page: 1 }));
-    },
-    [activeTab, setSubsQueryOptions, setPendingQueryOptions, setLegacyQueryOptions]
+    }, 400), // انتظر 400ms بعد توقف المستخدم عن الكتابة
+    [] // تأكد من أن الدالة لا يُعاد إنشاؤها في كل مرة
   );
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+    // يمكنك اختيار مسح البحث عند التبديل بين التبويبات أو إبقائه
+    // setGlobalSearchTerm("");
   };
 
   const handleRefreshData = useCallback(async () => {
     showSnackbar("Refreshing data...", "info");
     try {
-      if (activeTab === 0 && fetchSubscriptionsDataHook) {
-        await fetchSubscriptionsDataHook(subsQueryOptions, subsCustomFilters, globalSearchTerm);
+      if (activeTab === 0) {
+        await fetchSubscriptionsDataHook();
       } else if (activeTab === 1) {
-        if (fetchPendingDataHook)
-          await fetchPendingDataHook(pendingQueryOptions, pendingStatusFilter, globalSearchTerm);
-        if (fetchPendingStatsHook) await fetchPendingStatsHook();
-      } else if (activeTab === 2 && fetchLegacyDataHook) {
-        await fetchLegacyDataHook(legacyQueryOptions, legacyProcessedFilter, globalSearchTerm);
+        await fetchHistoryDataHook();
       }
     } catch (refreshError) {
       showSnackbar("Error refreshing data: " + (refreshError.message || "Unknown error"), "error");
     }
-  }, [
-    activeTab,
-    globalSearchTerm,
-    fetchSubscriptionsDataHook,
-    subsQueryOptions,
-    subsCustomFilters,
-    fetchPendingDataHook,
-    pendingQueryOptions,
-    pendingStatusFilter,
-    fetchPendingStatsHook,
-    fetchLegacyDataHook,
-    legacyQueryOptions,
-    legacyProcessedFilter,
-    showSnackbar,
-  ]);
+  }, [activeTab, fetchSubscriptionsDataHook, fetchHistoryDataHook, showSnackbar]);
 
   const handleOpenAddOrRenewModal = () => {
     setEditingSubscription(null);
@@ -198,49 +166,35 @@ function Tables() {
   const handleFormSubmit = async (formData, mode, subscriptionIdToUpdate) => {
     try {
       if (mode === "edit_existing") {
-        // تأكد أن لديك نقطة PUT في الخادم وأنها تتوقع subscriptionId في المسار
         await updateSubscriptionAdmin(subscriptionIdToUpdate, formData);
         showSnackbar("Subscription updated successfully!", "success");
       } else {
-        // mode === "add_or_renew"
         await addOrRenewSubscriptionAdmin(formData);
         showSnackbar("Subscription added/renewed successfully!", "success");
       }
       handleCloseModal();
-      handleRefreshData(); // أعد جلب البيانات للجدول الحالي
+      await handleRefreshData(); // استدعاء await هنا لضمان التحديث قبل أي شيء آخر
     } catch (err) {
-      const errorMessage =
-        err.response?.data?.detail ||
-        err.response?.data?.error ||
-        err.message ||
-        "Error processing form";
+      const errorMessage = err.response?.data?.error || err.message || "Error processing form";
       showSnackbar(errorMessage, "error");
     }
   };
 
-  const isAnyLoading = useMemo(
-    () => subsLoading || pendingLoadingState || legacyLoadingState,
-    [subsLoading, pendingLoadingState, legacyLoadingState]
-  );
+  const isAnyLoading = useMemo(() => subsLoading || historyLoading, [subsLoading, historyLoading]);
   const currentTabSpinnerOnRefresh = useMemo(() => {
     if (activeTab === 0) return subsLoading && subscriptions.length > 0;
-    if (activeTab === 1) return pendingLoadingState && pendingData.length > 0;
-    if (activeTab === 2) return legacyLoadingState && legacyData.length > 0;
+    if (activeTab === 1) return historyLoading && historyData.length > 0;
     return false;
-  }, [
-    activeTab,
-    subsLoading,
-    subscriptions,
-    pendingLoadingState,
-    pendingData,
-    legacyLoadingState,
-    legacyData,
-  ]);
+  }, [activeTab, subsLoading, subscriptions.length, historyLoading, historyData.length]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <DashboardLayout>
-        <DashboardNavbar onSearchChange={handleGlobalSearchChange} />
+        <DashboardNavbar
+          onSearchChange={handleGlobalSearchChange}
+          searchLabel={activeTab === 0 ? "بحث في الاشتراكات..." : "بحث في السجل..."}
+          initialValue={globalSearchTerm} // ✅ 6. تمرير القيمة الأولية لشريط البحث
+        />
         <MDBox pt={6} pb={3}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
@@ -259,7 +213,7 @@ function Tables() {
                   alignItems="center"
                 >
                   <MDTypography variant="h6" color="white">
-                    Subscriptions Management
+                    إدارة الاشتراكات
                   </MDTypography>
                 </MDBox>
 
@@ -272,19 +226,9 @@ function Tables() {
                   flexWrap="wrap"
                   sx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}
                 >
-                  <TabsManager
-                    activeTab={activeTab}
-                    handleTabChange={handleTabChange}
-                    pendingCount={pendingStatsData?.pending || 0}
-                    legacyCount={legacyTotalRecords || 0}
-                  />
-                  <Tooltip title="Refresh Data">
-                    <IconButton
-                      onClick={handleRefreshData}
-                      color="info"
-                      disabled={isAnyLoading}
-                      sx={{ ml: "auto" }}
-                    >
+                  <TabsManager activeTab={activeTab} handleTabChange={handleTabChange} />
+                  <Tooltip title="تحديث البيانات">
+                    <IconButton onClick={handleRefreshData} color="info" disabled={isAnyLoading}>
                       {currentTabSpinnerOnRefresh ? (
                         <CircularProgress size={24} color="inherit" />
                       ) : (
@@ -302,48 +246,33 @@ function Tables() {
                     setError={setSubsError}
                     queryOptions={subsQueryOptions}
                     setQueryOptions={setSubsQueryOptions}
-                    totalRecords={subsTotalRecords}
+                    pagination={subsPagination}
+                    statistics={subsStatistics}
                     customFilters={subsCustomFilters}
                     handleCustomFilterChange={handleSubsCustomFilterChange}
                     subscriptionTypes={subscriptionTypes}
+                    subscriptionPlans={subscriptionPlans}
                     availableSources={availableSources}
-                    onAddNewOrRenewClick={handleOpenAddOrRenewModal} // اسم محدث
-                    onEditExistingClick={handleOpenEditExistingModal} // اسم محدث
-                    onDataShouldRefresh={handleRefreshData} // لتحديث البيانات بعد الإلغاء
-                    showSnackbar={showSnackbar} // تمرير showSnackbar
+                    onAddNewOrRenewClick={handleOpenAddOrRenewModal}
+                    onEditExistingClick={handleOpenEditExistingModal}
+                    onDataShouldRefresh={handleRefreshData}
+                    showSnackbar={showSnackbar}
                   />
                 )}
 
                 {activeTab === 1 && (
-                  <PendingTabContent
-                    pendingData={pendingData}
-                    loading={pendingLoadingState}
-                    error={pendingError}
-                    setError={setPendingError}
-                    queryOptions={pendingQueryOptions}
-                    setQueryOptions={setPendingQueryOptions}
-                    totalRecords={pendingTotalRecords}
-                    statsData={pendingStatsData}
-                    statusFilter={pendingStatusFilter}
-                    handleStatusFilterChange={handlePendingStatusFilterChange}
-                    handleMarkComplete={handlePendingMarkCompleteInternal}
-                    bulkProcessingLoading={bulkProcessingLoading}
-                    handleBulkProcess={handlePendingBulkProcessInternal}
-                  />
-                )}
-
-                {activeTab === 2 && (
-                  <LegacyTabContent
-                    legacyData={legacyData}
-                    loading={legacyLoadingState}
-                    error={legacyError}
-                    setError={setLegacyError}
-                    queryOptions={legacyQueryOptions}
-                    setQueryOptions={setLegacyQueryOptions}
-                    totalRecords={legacyTotalRecords}
-                    processedLegacyCount={processedLegacyCount}
-                    processedFilter={legacyProcessedFilter}
-                    handleProcessedFilterChange={handleLegacyProcessedFilterChange}
+                  <SubscriptionHistoryTabContent
+                    historyData={historyData}
+                    loading={historyLoading}
+                    error={historyError}
+                    setError={setHistoryError}
+                    queryOptions={historyQueryOptions}
+                    setQueryOptions={setHistoryQueryOptions}
+                    pagination={historyPagination}
+                    customFilters={historyCustomFilters}
+                    handleCustomFilterChange={handleHistoryCustomFilterChange}
+                    availableSources={availableSources}
+                    showSnackbar={showSnackbar}
                   />
                 )}
               </Card>
@@ -357,14 +286,8 @@ function Tables() {
           onSubmit={handleFormSubmit}
           initialValues={editingSubscription}
           subscriptionTypes={subscriptionTypes}
-          availableSources={(availableSources || []).map((s) => s.value)} // لا تزال مفيدة إذا كان التعديل يسمح باختيار المصدر
+          availableSources={availableSources.map((s) => s.value)}
           mode={formModalMode}
-        />
-
-        <BulkProcessResultModal
-          open={bulkResultModalOpen}
-          onClose={handleCloseBulkResultModal}
-          result={bulkProcessResult}
         />
 
         <Snackbar

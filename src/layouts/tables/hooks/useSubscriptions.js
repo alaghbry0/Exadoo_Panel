@@ -1,31 +1,49 @@
-// ./hooks/useSubscriptions.js
+// src/layouts/tables/hooks/useSubscriptions.js
+
 import { useState, useEffect, useCallback } from "react";
-import { getSubscriptions } from "../services/api";
+import { getSubscriptions } from "../../../services/api";
 
 export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const [pagination, setPagination] = useState({
+    page: 1,
+    page_size: 20,
+    total: 0,
+    total_pages: 1,
+  });
+
+  const [statistics, setStatistics] = useState({
+    total_records: 0,
+    active_count: 0,
+    expired_count: 0,
+    expiring_soon_count: 0,
+    inactive_count: 0,
+  });
+
   const [tableQueryOptions, setTableQueryOptions] = useState({
-    // مُحدِّث الحالة المباشر
     page: 1,
     pageSize: 20,
+    sort_by: "created_at",
+    sort_order: "desc",
   });
+
   const [customFilters, setCustomFilters] = useState({});
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
-
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [activeSubscriptionsCount, setActiveSubscriptionsCount] = useState(0);
 
   const fetchData = useCallback(
     async (queryOpts, filters, search) => {
       setLoading(true);
       setError(null);
+
       try {
         const paramsToSend = {
           page: queryOpts.page,
           page_size: queryOpts.pageSize,
+          sort_by: queryOpts.sort_by || "created_at",
+          sort_order: queryOpts.sort_order || "desc",
           search: search || undefined,
           ...filters,
         };
@@ -39,13 +57,8 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
           ) {
             delete paramsToSend[key];
           }
-          if (
-            (key === "start_date" ||
-              key === "end_date" ||
-              key === "startDate" ||
-              key === "endDate") &&
-            paramsToSend[key]
-          ) {
+
+          if ((key === "start_date" || key === "end_date") && paramsToSend[key]) {
             if (typeof paramsToSend[key].toISOString === "function") {
               paramsToSend[key] = paramsToSend[key].toISOString().split("T")[0];
             } else if (typeof paramsToSend[key] === "object" && "$y" in paramsToSend[key]) {
@@ -58,28 +71,29 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
 
         if (responseData && responseData.data) {
           setSubscriptions(responseData.data || []);
-          setTotalRecords(responseData.total || 0);
-          setActiveSubscriptionsCount(responseData.active_subscriptions_count || 0);
-          // لا حاجة لتحديث tableQueryOptions هنا بناءً على استجابة الخادم إلا إذا كان ضروريًا بشكل صريح
+          setPagination(
+            responseData.pagination || { page: 1, page_size: 20, total: 0, total_pages: 1 }
+          );
+          setStatistics(responseData.statistics || {});
         } else {
           setSubscriptions([]);
-          setTotalRecords(0);
-          setActiveSubscriptionsCount(0);
-          // يمكنك عرض خطأ هنا إذا لم تكن هناك بيانات متوقعة
-          // showSnackbar("Failed to fetch subscriptions or no data returned.", "error");
+          setPagination({ page: 1, page_size: 20, total: 0, total_pages: 1 });
+          setStatistics({});
         }
       } catch (err) {
         console.error("Error fetching subscriptions:", err);
-        setError(err.message || "An error occurred while fetching subscriptions.");
-        showSnackbar(err.message || "Failed to fetch subscriptions.", "error");
+        const errorMessage =
+          err.response?.data?.error || err.message || "Failed to fetch subscriptions.";
+        setError(errorMessage);
+        showSnackbar(errorMessage, "error");
         setSubscriptions([]);
-        setTotalRecords(0);
-        setActiveSubscriptionsCount(0);
+        setPagination({ page: 1, page_size: 20, total: 0, total_pages: 1 });
+        setStatistics({});
       } finally {
         setLoading(false);
       }
     },
-    [showSnackbar] // تم إزالة fetchData من الاعتماديات لتجنب الحلقات
+    [showSnackbar]
   );
 
   const handleCustomFilterChange = useCallback((newCustomFilters) => {
@@ -87,6 +101,19 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
     setTableQueryOptions((prev) => ({ ...prev, page: 1 }));
   }, []);
 
+  // ✅ --- تم إضافة هذا الـ useEffect هنا ---
+  // يضمن هذا أن يتم تحديث الحالة الداخلية للخطاف إذا تغير مصطلح البحث القادم من الخارج.
+  useEffect(() => {
+    // حدث الحالة الداخلية فقط إذا كانت القيمة الجديدة مختلفة عن الحالية
+    if (initialSearchTerm !== searchTerm) {
+      setSearchTerm(initialSearchTerm);
+      // إعادة تعيين الصفحة إلى 1 عند وصول بحث جديد من الخارج لضمان عرض النتائج من البداية
+      setTableQueryOptions((prev) => ({ ...prev, page: 1 }));
+    }
+  }, [initialSearchTerm]); // يراقب التغييرات في `initialSearchTerm` القادم من الـ props
+
+  // هذا الـ useEffect الحالي صحيح ومهم، فهو الذي يقوم بجلب البيانات فعليًا
+  // عندما يتغير البحث أو الفلاتر أو خيارات الجدول.
   useEffect(() => {
     fetchData(tableQueryOptions, customFilters, searchTerm);
   }, [fetchData, tableQueryOptions, customFilters, searchTerm]);
@@ -97,9 +124,10 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
     error,
     setError,
     tableQueryOptions,
-    setTableQueryOptions, // <-- التغيير الرئيسي: أرجع مُحدِّث الحالة المباشر
-    totalRecords,
-    activeSubscriptionsCount,
+    setTableQueryOptions,
+    pagination,
+    totalRecords: pagination.total,
+    statistics,
     customFilters,
     handleCustomFilterChange,
     setSearchTerm,
