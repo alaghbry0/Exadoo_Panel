@@ -1,7 +1,7 @@
 // src/layouts/payments/PaymentsPage.js
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useLocation } from "react-router-dom"; // ✅ 1. استيراد useLocation
+import { useLocation } from "react-router-dom";
 import { Card, CircularProgress, Snackbar, IconButton, Tooltip, Grid, Paper } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import MDBox from "components/MDBox";
@@ -36,19 +36,15 @@ const StatsCard = ({ title, count, color = "text", format = (val) => val }) => (
 );
 
 function PaymentsPage() {
-  const location = useLocation(); // ✅ 2. تهيئة useLocation
+  const location = useLocation();
 
-  // ✅ 3. دالة مساعدة لقراءة قيمة من search params
   const getSearchParam = (paramName) => {
     const params = new URLSearchParams(location.search);
     return params.get(paramName) || "";
   };
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
-
-  // ✅ 4. تهيئة globalSearchTerm بالقيمة من الرابط
   const [globalSearchTerm, setGlobalSearchTerm] = useState(() => getSearchParam("search"));
-
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(INITIAL_VISIBLE_COLUMNS);
@@ -71,13 +67,12 @@ function PaymentsPage() {
     fetchData: refreshData,
   } = usePayments(showSnackbar, globalSearchTerm);
 
-  // ✅ 5. useEffect لمزامنة التغييرات في الرابط مع حالة البحث
   useEffect(() => {
     const newSearch = getSearchParam("search");
     if (newSearch !== globalSearchTerm) {
       setGlobalSearchTerm(newSearch);
     }
-  }, [location.search]); // يعتمد على تغييرات الرابط
+  }, [location.search]);
 
   // --- State for filter metadata ---
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
@@ -117,6 +112,12 @@ function PaymentsPage() {
     }));
   }, []);
 
+  // ✅ 1. تعريف الدالة المفقودة باستخدام useCallback لتحسين الأداء
+  const handleOpenUserDetails = useCallback((payment) => {
+    setSelectedPayment(payment);
+    setDetailsDialogOpen(true);
+  }, []);
+
   const tableColumns = useMemo(() => {
     const actionColumn = {
       Header: "الإجراءات",
@@ -125,6 +126,7 @@ function PaymentsPage() {
       disableSortBy: true,
       Cell: ({ row }) => (
         <Tooltip title="View Details">
+          {/* الآن هذا الاستدعاء سيعمل بشكل صحيح */}
           <IconButton size="small" onClick={() => handleOpenUserDetails(row.original)} color="info">
             <VisibilityIcon fontSize="inherit" />
           </IconButton>
@@ -146,16 +148,15 @@ function PaymentsPage() {
     });
 
     return [...formattedBase, actionColumn];
-  }, [visibleColumns]);
+  }, [visibleColumns, handleOpenUserDetails]); // ✅ 2. إضافة الدالة إلى مصفوفة الاعتماديات
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <DashboardLayout>
-        {/* ✅ 6. تمرير قيمة globalSearchTerm إلى شريط البحث */}
         <DashboardNavbar
           onSearchChange={setGlobalSearchTerm}
           searchLabel="بحث في المدفوعات..."
-          initialValue={globalSearchTerm} // تمرير القيمة الأولية
+          initialValue={globalSearchTerm}
         />
         <MDBox pt={6} pb={3}>
           <Card>
