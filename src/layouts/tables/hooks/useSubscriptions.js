@@ -31,10 +31,18 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
   });
 
   const [customFilters, setCustomFilters] = useState({});
-  const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
 
+  // --- التعديل الأول: استخدام useState مع useEffect لتحديث searchTerm ---
+  // هذا يعطينا تحكماً أفضل في تحديث حالة البحث الداخلية
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
+  useEffect(() => {
+    setSearchTerm(initialSearchTerm);
+    setTableQueryOptions((prev) => ({ ...prev, page: 1 }));
+  }, [initialSearchTerm]);
+
+  // --- التعديل الثاني: تعديل دالة fetchData لجعل المعاملات اختيارية ---
   const fetchData = useCallback(
-    async (queryOpts, filters, search) => {
+    async (queryOpts = tableQueryOptions, filters = customFilters, search = searchTerm) => {
       setLoading(true);
       setError(null);
 
@@ -93,7 +101,7 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
         setLoading(false);
       }
     },
-    [showSnackbar]
+    [showSnackbar, tableQueryOptions, customFilters, searchTerm] // إضافة الاعتماديات لضمان أن القيم الافتراضية محدثة
   );
 
   const handleCustomFilterChange = useCallback((newCustomFilters) => {
@@ -101,19 +109,8 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
     setTableQueryOptions((prev) => ({ ...prev, page: 1 }));
   }, []);
 
-  // ✅ --- تم إضافة هذا الـ useEffect هنا ---
-  // يضمن هذا أن يتم تحديث الحالة الداخلية للخطاف إذا تغير مصطلح البحث القادم من الخارج.
-  useEffect(() => {
-    // حدث الحالة الداخلية فقط إذا كانت القيمة الجديدة مختلفة عن الحالية
-    if (initialSearchTerm !== searchTerm) {
-      setSearchTerm(initialSearchTerm);
-      // إعادة تعيين الصفحة إلى 1 عند وصول بحث جديد من الخارج لضمان عرض النتائج من البداية
-      setTableQueryOptions((prev) => ({ ...prev, page: 1 }));
-    }
-  }, [initialSearchTerm]); // يراقب التغييرات في `initialSearchTerm` القادم من الـ props
-
-  // هذا الـ useEffect الحالي صحيح ومهم، فهو الذي يقوم بجلب البيانات فعليًا
-  // عندما يتغير البحث أو الفلاتر أو خيارات الجدول.
+  // هذا الـ useEffect هو المحرك الرئيسي لجلب البيانات
+  // يتم تشغيله عند تغيير أي من خيارات الجدول أو الفلاتر أو مصطلح البحث
   useEffect(() => {
     fetchData(tableQueryOptions, customFilters, searchTerm);
   }, [fetchData, tableQueryOptions, customFilters, searchTerm]);
