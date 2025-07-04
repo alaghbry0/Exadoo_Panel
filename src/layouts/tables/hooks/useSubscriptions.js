@@ -31,7 +31,7 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
   });
 
   const [customFilters, setCustomFilters] = useState({});
-  
+
   // --- التعديل الأول: استخدام useState مع useEffect لتحديث searchTerm ---
   // هذا يعطينا تحكماً أفضل في تحديث حالة البحث الداخلية
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
@@ -42,11 +42,7 @@ export function useSubscriptions(showSnackbar, initialSearchTerm = "") {
 
   // --- التعديل الثاني: تعديل دالة fetchData لجعل المعاملات اختيارية ---
   const fetchData = useCallback(
-    async (
-      queryOpts = tableQueryOptions,
-      filters = customFilters,
-      search = searchTerm
-    ) => {
+    async (queryOpts = tableQueryOptions, filters = customFilters, search = searchTerm) => {
       setLoading(true);
       setError(null);
 
