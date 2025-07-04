@@ -9,12 +9,13 @@ import {
   Grid,
   Chip as MuiChip,
   Typography,
+  Box, // ⭐ إضافة Box لحل مشكلة Tooltip
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import AddIcon from "@mui/icons-material/Add";
 import MuiAlert from "@mui/material/Alert";
-import FileDownloadIcon from "@mui/icons-material/FileDownload"; // <<<--- تمت الإضافة
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
 // Material Dashboard Components
 import MDBox from "components/MDBox";
@@ -30,7 +31,8 @@ import { useUsers } from "./hooks/useUsers";
 // Components
 import UserDetailsDialog from "./components/UserDetailsDialog";
 import AddSubscriptionDialog from "./components/AddSubscriptionDialog";
-import ExportUsersDialog from "./components/ExportUsersDialog"; // <<<--- تمت الإضافة (افترض أن الاسم هو ExportUsersDialog)
+import ExportUsersDialog from "./components/ExportUsersDialog";
+import AddUserDiscountDialog from "./components/AddUserDiscountDialog";
 
 // Configs and Utils
 import { BASE_COLUMNS_CONFIG_USERS } from "./config/users.config";
@@ -41,6 +43,8 @@ import {
   getSubscriptionTypes,
   getSubscriptionSources,
   exportUsersToExcel as exportUsers,
+  getDiscounts,
+  getSubscriptionPlans, // ⭐ التأكد من أن هذا الاسم يطابق ما تم تصديره من api.js
 } from "../../services/api";
 
 const CustomAlert = forwardRef(function CustomAlert(props, ref) {
@@ -59,8 +63,9 @@ function UsersPage() {
   const [globalSearchTerm, setGlobalSearchTerm] = useState("");
   const [userDetailsDialogOpen, setUserDetailsDialogOpen] = useState(false);
   const [addSubscriptionDialogOpen, setAddSubscriptionDialogOpen] = useState(false);
+  const [addDiscountDialogOpen, setAddDiscountDialogOpen] = useState(false);
   const [activeUserForDialog, setActiveUserForDialog] = useState(null);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false); // <<<--- تمت الإضافة
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const showSnackbar = useCallback((message, severity = "info") => {
@@ -80,7 +85,7 @@ function UsersPage() {
     setTableQueryOptions,
     totalRecords,
     usersCountStat,
-    setSearchTerm,
+    setSearchTerm, // setSearchTerm is used by DashboardNavbar via onSearchChange
     refetchData,
     selectedUserDetails,
     userDetailsLoading,
@@ -91,42 +96,43 @@ function UsersPage() {
 
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
   const [availableSources, setAvailableSources] = useState([]);
+  const [availableDiscounts, setAvailableDiscounts] = useState([]);
+  const [availablePlans, setAvailablePlans] = useState([]);
 
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        const [typesData, sourcesData] = await Promise.all([
+        const [typesData, sourcesData, discountsData, plansData] = await Promise.all([
           getSubscriptionTypes(),
           getSubscriptionSources(),
+          getDiscounts(),
+          getSubscriptionPlans(), // ⭐ الآن هذا الاستدعاء صحيح
         ]);
+
         setSubscriptionTypes(typesData || []);
         const formattedSources = (sourcesData || []).map((s) => ({
           value: typeof s === "string" ? s : s.name,
           label: typeof s === "string" ? s : s.name,
         }));
         setAvailableSources(formattedSources);
+
+        setAvailableDiscounts(discountsData || []);
+        setAvailablePlans(plansData || []);
       } catch (err) {
-        console.error("Failed to load data for Add Subscription dialog:", err);
-        showSnackbar("Failed to load data for Add Subscription dialog", "error");
+        console.error("Failed to load data for dialogs:", err);
+        showSnackbar("Failed to load required data for dialogs.", "error");
       }
     };
     fetchDropdownData();
   }, [showSnackbar]);
 
+  // This effect synchronizes the local search term with the hook's search term
   useEffect(() => {
     setSearchTerm(globalSearchTerm);
   }, [globalSearchTerm, setSearchTerm]);
 
-  const handleGlobalSearchChange = useCallback((value) => {
-    setGlobalSearchTerm(value);
-  }, []);
-
-  const handleRefreshData = useCallback(() => {
-    if (refetchData) {
-      refetchData();
-    }
-  }, [refetchData]);
-
+  const handleGlobalSearchChange = useCallback((value) => setGlobalSearchTerm(value), []);
+  const handleRefreshData = useCallback(() => refetchData?.(), [refetchData]);
   const handleOpenUserDetails = useCallback(
     (user) => {
       setActiveUserForDialog(user);
@@ -135,27 +141,22 @@ function UsersPage() {
     },
     [fetchUserDetailsForDialog]
   );
-
   const handleCloseUserDetailsDialog = useCallback(() => {
     setUserDetailsDialogOpen(false);
     clearSelectedUserDetails();
     setActiveUserForDialog(null);
   }, [clearSelectedUserDetails]);
-
   const handleOpenAddSubscriptionDialog = useCallback((user) => {
     setActiveUserForDialog(user);
     setAddSubscriptionDialogOpen(true);
   }, []);
-
-  const handleCloseAddSubscriptionDialog = useCallback(() => {
-    setAddSubscriptionDialogOpen(false);
-  }, []);
-
+  const handleCloseAddSubscriptionDialog = useCallback(
+    () => setAddSubscriptionDialogOpen(false),
+    []
+  );
   const handleSubscriptionAdded = useCallback(async () => {
     showSnackbar("Subscription action complete. Refreshing user data...", "success");
-    if (refetchData) {
-      refetchData();
-    }
+    refetchData?.();
     if (userDetailsDialogOpen && activeUserForDialog?.telegram_id) {
       await fetchUserDetailsForDialog(activeUserForDialog.telegram_id);
     }
@@ -167,23 +168,31 @@ function UsersPage() {
     fetchUserDetailsForDialog,
     showSnackbar,
   ]);
-
-  // <<<--- تمت إضافة الدوال المعالجة لـ Export Dialog ---<<<
-  const handleOpenExportDialog = useCallback(() => {
-    setExportDialogOpen(true);
+  const handleOpenAddDiscountDialog = useCallback((user) => {
+    setActiveUserForDialog(user);
+    setAddDiscountDialogOpen(true);
   }, []);
-
-  const handleCloseExportDialog = useCallback(() => {
-    setExportDialogOpen(false);
-  }, []);
-
+  const handleCloseAddDiscountDialog = useCallback(() => setAddDiscountDialogOpen(false), []);
+  const handleDiscountAdded = useCallback(async () => {
+    showSnackbar("Discount added successfully. Refreshing user details...", "success");
+    if (userDetailsDialogOpen && activeUserForDialog?.telegram_id) {
+      await fetchUserDetailsForDialog(activeUserForDialog.telegram_id);
+    }
+    handleCloseAddDiscountDialog();
+  }, [
+    userDetailsDialogOpen,
+    activeUserForDialog,
+    fetchUserDetailsForDialog,
+    showSnackbar,
+    handleCloseAddDiscountDialog,
+  ]);
+  const handleOpenExportDialog = useCallback(() => setExportDialogOpen(true), []);
+  const handleCloseExportDialog = useCallback(() => setExportDialogOpen(false), []);
   const handleExportSubmit = useCallback(
     async (exportOptions) => {
-      // اسم الدالة onSubmit في ExportUsersDialog.js يتوافق مع هذه.
       try {
         showSnackbar("Generating Excel file...", "info");
-        const blob = await exportUsers(exportOptions); // استدعاء API التصدير
-
+        const blob = await exportUsers(exportOptions);
         const url = window.URL.createObjectURL(new Blob([blob]));
         const link = document.createElement("a");
         link.href = url;
@@ -193,7 +202,6 @@ function UsersPage() {
         link.click();
         link.parentNode.removeChild(link);
         window.URL.revokeObjectURL(url);
-
         showSnackbar("Excel file downloaded successfully!", "success");
         handleCloseExportDialog();
       } catch (err) {
@@ -204,13 +212,10 @@ function UsersPage() {
           err.message ||
           "Failed to export data.";
         showSnackbar(`Export Error: ${message}`, "error");
-        // قد لا ترغب في إغلاق الحوار عند الفشل
       }
     },
-    [showSnackbar, handleCloseExportDialog] // أضفت handleCloseExportDialog للاعتماديات
+    [showSnackbar, handleCloseExportDialog]
   );
-  // >>>------------------------------------------------>>>
-
   const usersDataTableColumns = useMemo(() => {
     const actionColumn = {
       Header: "ACTIONS",
@@ -241,12 +246,10 @@ function UsersPage() {
         </MDBox>
       ),
     };
-
     const formattedBase = BASE_COLUMNS_CONFIG_USERS.map((col) => {
-      if (col.accessor === "active_subscription_count") {
+      if (col.accessor === "active_subscription_count")
         return { ...col, Cell: ({ value }) => formatUserSubscriptionCount(value) };
-      }
-      if (col.accessor === "subscription_count") {
+      if (col.accessor === "subscription_count")
         return {
           ...col,
           Cell: ({ value }) => (
@@ -255,7 +258,6 @@ function UsersPage() {
             </Typography>
           ),
         };
-      }
       return {
         ...col,
         Cell: ({ value }) => (
@@ -267,7 +269,6 @@ function UsersPage() {
     });
     return [...formattedBase, actionColumn];
   }, [handleOpenUserDetails, handleOpenAddSubscriptionDialog]);
-
   const usersPageCount = Math.ceil(totalRecords / (tableQueryOptions.pageSize || 20));
 
   return (
@@ -293,7 +294,6 @@ function UsersPage() {
                 <MDTypography variant="h6" color="white">
                   Users Management
                 </MDTypography>
-                {/* <<<--- تم تعديل هذا الجزء لإضافة زر التصدير ---<<< */}
                 <MDBox display="flex" alignItems="center" gap={1}>
                   {usersCountStat !== null && typeof usersCountStat !== "undefined" && (
                     <MuiChip
@@ -302,32 +302,38 @@ function UsersPage() {
                       sx={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white" }}
                     />
                   )}
+                  {/* ⭐⭐ إصلاح تحذير Tooltip هنا ⭐⭐ */}
                   <Tooltip title="تصدير البيانات">
-                    <IconButton
-                      onClick={handleOpenExportDialog}
-                      sx={{ color: "white" }}
-                      disabled={loading || usersData.length === 0} // تعطيل إذا كان التحميل جاريًا أو لا توجد بيانات
-                    >
-                      <FileDownloadIcon />
-                    </IconButton>
+                    <Box component="span">
+                      {" "}
+                      {/* استخدام span كـ wrapper */}
+                      <IconButton
+                        onClick={handleOpenExportDialog}
+                        sx={{ color: "white" }}
+                        disabled={loading || usersData.length === 0}
+                      >
+                        <FileDownloadIcon />
+                      </IconButton>
+                    </Box>
                   </Tooltip>
                   <Tooltip title="Refresh Data">
-                    <IconButton
-                      onClick={handleRefreshData}
-                      sx={{ color: "white" }}
-                      disabled={loading} // تعطيل إذا كان التحميل جاريًا
-                    >
-                      {/* تعديل طفيف: إظهار الدائرة فقط إذا كان التحميل جاريًا وهناك بيانات بالفعل (تجنب وميض الأيقونة عند التحميل الأولي)
-                          أو ببساطة: loading ? <CircularProgress... : <RefreshIcon /> */}
-                      {loading && usersData.length > 0 ? (
-                        <CircularProgress size={24} color="inherit" />
-                      ) : (
-                        <RefreshIcon />
-                      )}
-                    </IconButton>
+                    <Box component="span">
+                      {" "}
+                      {/* استخدام span كـ wrapper */}
+                      <IconButton
+                        onClick={handleRefreshData}
+                        sx={{ color: "white" }}
+                        disabled={loading}
+                      >
+                        {loading && usersData.length > 0 ? (
+                          <CircularProgress size={24} color="inherit" />
+                        ) : (
+                          <RefreshIcon />
+                        )}
+                      </IconButton>
+                    </Box>
                   </Tooltip>
                 </MDBox>
-                {/* >>>------------------------------------------------>>> */}
               </MDBox>
 
               {error && !loading && (
@@ -365,21 +371,17 @@ function UsersPage() {
                     }}
                     showTotalEntries={totalRecords > 0}
                     noEndBorder
-                    canSearch={false} // البحث يتم عبر شريط البحث العام
+                    canSearch={false}
                     pagination={{ variant: "gradient", color: "info" }}
                     manualPagination
                     pageCount={usersPageCount > 0 ? usersPageCount : 1}
                     page={tableQueryOptions.page - 1}
-                    onPageChange={(newPageIndex) => {
-                      if (setTableQueryOptions) {
-                        setTableQueryOptions({ page: newPageIndex + 1 });
-                      }
-                    }}
-                    onEntriesPerPageChange={(newPageSize) => {
-                      if (setTableQueryOptions) {
-                        setTableQueryOptions({ pageSize: newPageSize, page: 1 });
-                      }
-                    }}
+                    onPageChange={(newPageIndex) =>
+                      setTableQueryOptions?.({ page: newPageIndex + 1 })
+                    }
+                    onEntriesPerPageChange={(newPageSize) =>
+                      setTableQueryOptions?.({ pageSize: newPageSize, page: 1 })
+                    }
                     sx={
                       loading && usersData.length > 0 ? { opacity: 0.7, pointerEvents: "none" } : {}
                     }
@@ -391,6 +393,7 @@ function UsersPage() {
         </Grid>
       </MDBox>
 
+      {/* --- Dialogs Section --- */}
       {userDetailsDialogOpen && selectedUserDetails && (
         <UserDetailsDialog
           open={userDetailsDialogOpen}
@@ -398,31 +401,38 @@ function UsersPage() {
           user={selectedUserDetails}
           loading={userDetailsLoading}
           error={userDetailsError}
-          onAddSubscription={() => handleOpenAddSubscriptionDialog(selectedUserDetails)} // <-- تم تغيير اسم الخاصية إلى onAddSubscription
+          onAddSubscription={() => handleOpenAddSubscriptionDialog(selectedUserDetails)}
+          onAddDiscount={() => handleOpenAddDiscountDialog(selectedUserDetails)}
         />
       )}
       {addSubscriptionDialogOpen && activeUserForDialog && (
         <AddSubscriptionDialog
           open={addSubscriptionDialogOpen}
           onClose={handleCloseAddSubscriptionDialog}
-          user={activeUserForDialog} // <--- قم بتمرير الكائن بأكمله هنا
+          user={activeUserForDialog}
           onSuccess={handleSubscriptionAdded}
-          subscriptionTypes={subscriptionTypes} // هذه الخصائص الأخرى تبدو صحيحة
-          availableSources={(availableSources || []).map((s) => s.value)} // هذه الخصائص الأخرى تبدو صحيحة
+          subscriptionTypes={subscriptionTypes}
+          availableSources={(availableSources || []).map((s) => s.value)}
         />
       )}
-
-      {/* <<<--- تم إضافة المربع الحواري للتصدير هنا ---<<< */}
+      {addDiscountDialogOpen && activeUserForDialog && (
+        <AddUserDiscountDialog
+          open={addDiscountDialogOpen}
+          onClose={handleCloseAddDiscountDialog}
+          user={activeUserForDialog}
+          onSuccess={handleDiscountAdded}
+          discounts={availableDiscounts}
+          plans={availablePlans}
+        />
+      )}
       {exportDialogOpen && (
         <ExportUsersDialog
           open={exportDialogOpen}
           onClose={handleCloseExportDialog}
-          onSubmit={handleExportSubmit} // تمرير دالة الإرسال
-          currentSearchTerm={globalSearchTerm} // تمرير مصطلح البحث الحالي
+          onSubmit={handleExportSubmit}
+          currentSearchTerm={globalSearchTerm}
         />
       )}
-      {/* >>>-------------------------------------------->>> */}
-
       <MuiSnackbar
         open={snackbar.open}
         autoHideDuration={6000}

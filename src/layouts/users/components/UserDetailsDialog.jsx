@@ -31,6 +31,7 @@ import {
   VerifiedUser,
   Category,
   Source,
+  LocalOffer, // ⭐ إضافة أيقونة جديدة
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -172,7 +173,16 @@ const MiniTable = ({ columns, data, emptyMessage, onRowClick }) => {
   );
 };
 
-const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscription }) => {
+// ⭐ إضافة دالة معالجة جديدة
+const UserDetailsDialog = ({
+  open,
+  onClose,
+  user,
+  loading,
+  error,
+  onAddSubscription,
+  onAddDiscount, // <--- ⭐ دالة جديدة من الأب
+}) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const [copySuccess, setCopySuccess] = useState("");
@@ -331,6 +341,40 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
             sx={{ fontSize: "0.65rem", height: "20px", padding: "0 4px" }}
           />
         ),
+      },
+    ],
+    []
+  );
+
+  // ⭐ تعريف أعمدة جدول الخصومات
+  const discountColumns = useMemo(
+    () => [
+      { Header: "الخصم", accessor: "discount_name", align: "right", width: "1.5fr" },
+      { Header: "الخطة المطبقة", accessor: "plan_name", align: "right", width: "1.5fr" },
+      {
+        Header: "السعر الأصلي",
+        accessor: "original_plan_price",
+        align: "center",
+        width: "1fr",
+        Cell: ({ value }) => `$${parseFloat(value || 0).toFixed(2)}`,
+      },
+      {
+        Header: "السعر بعد الخصم",
+        accessor: "locked_price",
+        align: "center",
+        width: "1fr",
+        Cell: ({ value }) => (
+          <MDTypography variant="body2" color="success.main" fontWeight="bold">
+            ${parseFloat(value || 0).toFixed(2)}
+          </MDTypography>
+        ),
+      },
+      {
+        Header: "تاريخ المنح",
+        accessor: "granted_at",
+        align: "left",
+        width: "1.2fr",
+        Cell: ({ value }) => formatDate(value, true),
       },
     ],
     []
@@ -722,6 +766,20 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
                   onRowClick={handleSubscriptionRowClick}
                 />
               </SectionWrapper>
+
+              {/* ⭐⭐⭐ القسم الجديد: الخصومات النشطة ⭐⭐⭐ */}
+              <SectionWrapper
+                title={`الخصومات النشطة (${user.active_discounts?.length || 0})`}
+                titleIcon={<LocalOffer />}
+              >
+                <MiniTable
+                  columns={discountColumns}
+                  data={user.active_discounts || []}
+                  emptyMessage="لا توجد خصومات نشطة لهذا المستخدم."
+                  onRowClick={null} // لا يوجد إجراء عند النقر حاليًا
+                />
+              </SectionWrapper>
+              {/* ⭐⭐⭐ نهاية القسم الجديد ⭐⭐⭐ */}
             </Box>
           ) : (
             <MDBox
@@ -752,15 +810,26 @@ const UserDetailsDialog = ({ open, onClose, user, loading, error, onAddSubscript
             إغلاق
           </MDButton>
           {user && !loading && !error && (
-            <MDButton
-              onClick={onAddSubscription}
-              color="info"
-              variant="gradient"
-              startIcon={<Add />}
-              sx={{ boxShadow: theme.shadows[2], "&:hover": { boxShadow: theme.shadows[4] } }}
-            >
-              إضافة اشتراك
-            </MDButton>
+            // ⭐ إضافة الأزرار الجديدة
+            <MDBox display="flex" gap={1}>
+              <MDButton
+                onClick={onAddDiscount} // <--- ⭐ استدعاء الدالة الجديدة
+                color="warning"
+                variant="outlined"
+                startIcon={<LocalOffer />}
+              >
+                إضافة خصم
+              </MDButton>
+              <MDButton
+                onClick={onAddSubscription}
+                color="info"
+                variant="gradient"
+                startIcon={<Add />}
+                sx={{ boxShadow: theme.shadows[2], "&:hover": { boxShadow: theme.shadows[4] } }}
+              >
+                إضافة اشتراك
+              </MDButton>
+            </MDBox>
           )}
         </MuiDialogActions>
       </Dialog>

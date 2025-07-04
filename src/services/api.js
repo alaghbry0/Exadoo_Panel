@@ -78,6 +78,26 @@ export const updateSubscriptionPlan = (planId, data) =>
 export const deleteSubscriptionPlan = (planId) =>
   apiClient.delete(`/api/admin/subscription-plans/${planId}`);
 
+/** إدارة الخصومات (Discounts) **/
+export const getDiscounts = async () => {
+  const response = await apiClient.get("/api/admin/discounts");
+  return response.data;
+};
+
+export const createDiscount = (data) => apiClient.post("/api/admin/discounts", data);
+
+export const updateDiscount = (id, data) => apiClient.put(`/api/admin/discounts/${id}`, data);
+
+export const deleteDiscount = (
+  id // يمكنك إضافة هذا لاحقاً في الخادم
+) => apiClient.delete(`/api/admin/discounts/${id}`);
+
+export const applyDiscountToExisting = (id) =>
+  apiClient.post(`/api/admin/discounts/${id}/apply-to-existing`);
+
+export const addDiscountToUser = (telegramId, data) =>
+  apiClient.post(`/api/admin/users/${telegramId}/discounts`, data);
+
 // =================================================================
 // SECTION: إدارة المستخدمين والأدوار والصلاحيات
 // =================================================================

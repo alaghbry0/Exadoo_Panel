@@ -1,5 +1,9 @@
 // src/routes.js
 
+// ⭐ 1. استيراد المكون الجديد
+import ManageDiscounts from "layouts/ManageDiscounts";
+
+// --- باقي الاستيرادات كما هي ---
 import Dashboard from "layouts/dashboard";
 import Tables from "layouts/tables";
 import ManagePlans from "layouts/ManagePlans";
@@ -31,6 +35,15 @@ const routes = [
     icon: <Icon fontSize="small">receipt_long</Icon>,
     route: "/ManagePlans",
     component: <ManagePlans />,
+  },
+  // ⭐ 2. إضافة المسار الجديد هنا
+  {
+    type: "collapse",
+    name: "Manage Discounts",
+    key: "discounts",
+    icon: <Icon fontSize="small">local_offer</Icon>, // أيقونة مناسبة للخصومات والعروض
+    route: "/discounts",
+    component: <ManageDiscounts />,
   },
   {
     type: "collapse",

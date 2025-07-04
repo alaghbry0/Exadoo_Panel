@@ -252,8 +252,28 @@ function SubscriptionsTabContent({
         )}
       </MDBox>
 
-      <Dialog open={cancelConfirmOpen} onClose={handleCloseCancelConfirm}>
-        {/* ... (Your existing Dialog content) ... */}
+      <Dialog
+        open={cancelConfirmOpen}
+        onClose={handleCloseCancelConfirm}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">{"تأكيد حذف الاشتراك"}</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            هل أنت متأكد أنك تريد حذف هذا الاشتراك؟
+            <br />
+            <strong>لا يمكن التراجع عن هذا الإجراء.</strong>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <MDButton onClick={handleCloseCancelConfirm} color="secondary">
+            إلغاء
+          </MDButton>
+          <MDButton onClick={handleConfirmCancel} color="error" autoFocus>
+            تأكيد الحذف
+          </MDButton>
+        </DialogActions>
       </Dialog>
     </>
   );
