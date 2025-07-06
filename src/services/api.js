@@ -115,12 +115,12 @@ export const getUserDetails = async (telegramId) => {
 
 export const getPanelUsers = () => apiClient.get("/api/admin/users_panel");
 
-export const createPanelUser = (email, displayName, roleId) =>
-  apiClient.post("/api/admin/users_panel", {
-    email,
-    display_name: displayName,
-    role_id: parseInt(roleId, 10),
-  });
+// تعديل الدالة لتقبل كل البيانات
+export const createPanelUser = (userData) => apiClient.post("/api/admin/users_panel", userData);
+
+// إضافة دالة جديدة للتحديث
+export const updatePanelUser = (userId, userData) =>
+  apiClient.put(`/api/admin/users_panel/${userId}`, userData);
 
 export const deletePanelUser = (userId) => apiClient.delete(`/api/admin/users/${userId}`);
 
@@ -172,6 +172,11 @@ export const getPayments = async (filters = {}) => {
 // ===== Subscription Metadata API for Filters =====
 export const getPaymentsMeta = async () => {
   const response = await apiClient.get("/api/admin/payments/meta");
+  return response.data;
+};
+
+export const retryPaymentRenewal = async (paymentId) => {
+  const response = await apiClient.post(`/api/admin/payments/${paymentId}/retry-renewal`);
   return response.data;
 };
 

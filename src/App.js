@@ -1,7 +1,8 @@
 // src/App.js
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+// 1. تم إضافة useNavigate هنا
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import Icon from "@mui/material/Icon";
@@ -23,12 +24,12 @@ import PrivateRoute from "./PrivateRoute";
 import SignIn from "layouts/authentication/sign-in";
 
 // =================================================================
-// ✅✅ الخطوة 1: استيراد دالة الإعداد الجديدة من الملف الذي أنشأناه
+// استيراد دالة الإعداد الجديدة من الملف الذي أنشأناه
 import setupAxiosInterceptors from "services/setupInterceptors";
 // =================================================================
 
 // =================================================================
-// ✅✅ الخطوة 2: قم باستدعاء الدالة هنا، مرة واحدة عند تحميل التطبيق
+// قم باستدعاء الدالة هنا، مرة واحدة عند تحميل التطبيق
 // هذا يضمن أن المعترضات (interceptors) جاهزة قبل عرض أي مكون.
 setupAxiosInterceptors();
 // =================================================================
@@ -48,6 +49,8 @@ export default function App() {
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useLocation();
+  // 2. تم تهيئة useNavigate هنا
+  const navigate = useNavigate();
 
   useMemo(() => {
     const cacheRtl = createCache({ key: "rtl", stylisPlugins: [rtlPlugin] });
@@ -100,6 +103,22 @@ export default function App() {
       document.body.removeChild(script);
     };
   }, []);
+
+  // ✅✅ 3. هذا هو الكود الجديد الذي تم إضافته
+  // useEffect للاستماع لحدث انتهاء صلاحية المصادقة
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      console.log("Auth expired event caught in App.js. Redirecting to sign-in...");
+      navigate("/authentication/sign-in");
+    };
+
+    window.addEventListener("auth-expired", handleAuthExpired);
+
+    // دالة التنظيف لإزالة المستمع عند تفكيك المكون
+    return () => {
+      window.removeEventListener("auth-expired", handleAuthExpired);
+    };
+  }, [navigate]); // أضف navigate إلى مصفوفة الاعتماديات
 
   // دالة تسطيح المسارات (تبقى كما هي)
   const getRoutes = (allRoutes) => {

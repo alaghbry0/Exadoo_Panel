@@ -1,5 +1,7 @@
 // src/layouts/payments/PaymentDetailsDialog.js
+
 import React, { useState } from "react";
+// 👈 تم تعديل الاستيرادات
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -18,14 +20,38 @@ import TabContext from "@mui/lab/TabContext";
 import TabList from "@mui/lab/TabList";
 import TabPanel from "@mui/lab/TabPanel";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import { format, isValid } from "date-fns"; // استيراد isValid للتحقق من صحة التاريخ
+import ReplayIcon from "@mui/icons-material/Replay";
+import CircularProgress from "@mui/material/CircularProgress";
+import { format, isValid } from "date-fns";
 import { formatStatus, formatAmount, copyToClipboardUtil } from "./components/payments.utils";
+import { retryPaymentRenewal } from "services/api";
 
-function PaymentDetailsDialog({ open, onClose, payment, showSnackbar }) {
+// 👈 تم تعديل الـ props لاستقبال onRetrySuccess
+function PaymentDetailsDialog({ open, onClose, payment, showSnackbar, onRetrySuccess }) {
   const [tabValue, setTabValue] = useState("1");
+  const [isRetrying, setIsRetrying] = useState(false); // 👈 تم إضافة حالة جديدة
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+  };
+
+  // 👈 تم إضافة الدالة الجديدة هنا
+  const handleRetryClick = async () => {
+    setIsRetrying(true);
+    try {
+      const response = await retryPaymentRenewal(payment.id);
+      showSnackbar(response.message || "إعادة المحاولة بدأت بنجاح!", "success");
+      onClose(); // إغلاق النافذة بعد البدء بنجاح
+      if (onRetrySuccess) {
+        // استدعاء دالة لتحديث الجدول في الصفحة الرئيسية بعد 5 ثوانٍ
+        setTimeout(onRetrySuccess, 5000);
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || "فشل في بدء إعادة المحاولة.";
+      showSnackbar(errorMessage, "error");
+    } finally {
+      setIsRetrying(false);
+    }
   };
 
   if (!payment) return null;
@@ -116,12 +142,6 @@ function PaymentDetailsDialog({ open, onClose, payment, showSnackbar }) {
                   <MDTypography variant="body2">{formatDate(payment.expires_at)}</MDTypography>
                 </Grid>
               )}
-              {/* تاريخ التحديث غير موجود في بنية جدولك، إذا وجد أضفه
-              <Grid item xs={12} sm={6}>
-                <MDTypography variant="subtitle2" fontWeight="medium">تاريخ آخر تحديث</MDTypography>
-                <MDTypography variant="body2">{formatDate(payment.updated_at)}</MDTypography>
-              </Grid>
-              */}
               {payment.error_message && (
                 <Grid item xs={12}>
                   <MDTypography variant="subtitle2" fontWeight="medium" color="error">
@@ -248,7 +268,23 @@ function PaymentDetailsDialog({ open, onClose, payment, showSnackbar }) {
           </TabPanel>
         </TabContext>
       </DialogContent>
-      <DialogActions sx={{ p: "16px 24px" }}>
+      {/* 👈 تم تعديل قسم الأزرار بالكامل */}
+      <DialogActions sx={{ p: "16px 24px", justifyContent: "space-between" }}>
+        <MDBox>
+          {payment.status === "failed" && (
+            <Button
+              onClick={handleRetryClick}
+              color="warning"
+              variant="contained"
+              startIcon={
+                isRetrying ? <CircularProgress size={20} color="inherit" /> : <ReplayIcon />
+              }
+              disabled={isRetrying}
+            >
+              إعادة محاولة التجديد
+            </Button>
+          )}
+        </MDBox>
         <Button onClick={onClose} color="primary" variant="outlined">
           إغلاق
         </Button>

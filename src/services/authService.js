@@ -1,3 +1,5 @@
+// src/services/authService.js
+
 import { apiClient } from "./apiClient";
 
 // حفظ بيانات المصادقة في localStorage
@@ -44,9 +46,12 @@ export const logout = async () => {
     console.error("Server logout failed, cleaning up client-side.", error);
   } finally {
     // التنظيف المحلي يحدث دائمًا، سواء نجح طلب الخادم أم لا
+    console.log("Cleaning up local storage and dispatching auth-expired event."); // للتأكد من التنفيذ
     localStorage.removeItem("access_token");
     localStorage.removeItem("role");
     delete apiClient.defaults.headers.common["Authorization"];
-    window.location.href = "/authentication/sign-in"; // أو أي مسار تسجيل دخول آخر
+
+    // ✅✅ التعديل الرئيسي: أطلق حدثًا بدلاً من إعادة التوجيه مباشرة
+    window.dispatchEvent(new Event("auth-expired"));
   }
 };

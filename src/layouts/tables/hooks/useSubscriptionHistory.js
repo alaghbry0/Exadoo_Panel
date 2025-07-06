@@ -27,15 +27,24 @@ export function useSubscriptionHistory(showSnackbar, initialSearchTerm = "") {
   const [customFilters, setCustomFilters] = useState({});
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
 
+  // ✅ =================== التعديل المضاف هنا =================== ✅
+  // هذا الـ useEffect يقوم بمزامنة حالة البحث الداخلية مع التغييرات القادمة من المكون الأب
+  useEffect(() => {
+    // تحديث حالة البحث الداخلية في كل مرة تتغير فيها خاصية initialSearchTerm
+    setSearchTerm(initialSearchTerm);
+  }, [initialSearchTerm]); // هذا الـ Effect سيعمل في كل مرة يتغير فيها initialSearchTerm
+  // ✅ ======================================================== ✅
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
+      // الآن سيتم استخدام قيمة searchTerm المحدثة دائماً
       const paramsToSend = {
         page: tableQueryOptions.page,
         page_size: tableQueryOptions.pageSize,
-        search: searchTerm || undefined,
+        search: searchTerm || undefined, // هذه القيمة ستكون الآن متزامنة مع الأب
         ...customFilters,
       };
 
@@ -75,7 +84,7 @@ export function useSubscriptionHistory(showSnackbar, initialSearchTerm = "") {
     } finally {
       setLoading(false);
     }
-  }, [tableQueryOptions, customFilters, searchTerm, showSnackbar]);
+  }, [tableQueryOptions, customFilters, searchTerm, showSnackbar]); // searchTerm موجود بالفعل هنا، وهذا ممتاز
 
   const handleCustomFilterChange = useCallback((newCustomFilters) => {
     setCustomFilters(newCustomFilters);
@@ -86,6 +95,9 @@ export function useSubscriptionHistory(showSnackbar, initialSearchTerm = "") {
     fetchData();
   }, [fetchData]);
 
+  // ✅ =================== التعديل المضاف هنا =================== ✅
+  // تم حذف setSearchTerm من هنا لأن المكون الأب هو من يتحكم به الآن
+  // ✅ ======================================================== ✅
   return {
     historyData,
     loading,
@@ -93,11 +105,9 @@ export function useSubscriptionHistory(showSnackbar, initialSearchTerm = "") {
     setError,
     tableQueryOptions,
     setTableQueryOptions,
-    // --- تعديل: إرجاع كائن الـ pagination بالكامل ---
     pagination,
     customFilters,
     handleCustomFilterChange,
-    setSearchTerm,
     fetchData,
   };
 }

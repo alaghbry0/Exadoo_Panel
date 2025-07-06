@@ -138,9 +138,7 @@ function BroadcastComposer({ loading, data, onBroadcastSent, setSnackbar }) {
   };
 
   const insertVariable = (variable) => {
-    const textarea = document.querySelector(
-      'textarea[aria-label="نص الرسالة (يدعم HTML والمتغيرات)"]'
-    );
+    const textarea = document.querySelector('textarea[aria-label="الرسالة""]');
     if (textarea) {
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
@@ -320,7 +318,7 @@ function BroadcastComposer({ loading, data, onBroadcastSent, setSnackbar }) {
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={8}>
                         <MDInput
-                          label="نص الرسالة (يدعم HTML والمتغيرات)"
+                          label="الرسالة"
                           multiline
                           rows={8}
                           fullWidth

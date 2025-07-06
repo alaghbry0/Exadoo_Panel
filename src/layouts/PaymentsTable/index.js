@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { Card, CircularProgress, Snackbar, IconButton, Tooltip, Grid, Paper } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ReplayIcon from "@mui/icons-material/Replay"; // 👈 1. تم استيراد الأيقونة الجديدة
 import MDBox from "components/MDBox";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -12,9 +13,10 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import DataTable from "examples/Tables/DataTable";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+
 // Hooks & API
 import usePayments from "./hooks/usePayments";
-import { getPaymentsMeta } from "services/api";
+import { getPaymentsMeta, retryPaymentRenewal } from "services/api"; // 👈 2. تم استيراد دالة API الجديدة
 
 // Components
 import PaymentsTableToolbar from "./components/PaymentsTableToolbar";
@@ -48,6 +50,7 @@ function PaymentsPage() {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(INITIAL_VISIBLE_COLUMNS);
+  const [isRetrying, setIsRetrying] = useState(null); // 👈 3. حالة جديدة لتتبع الدفعة التي يعاد محاولتها
 
   const showSnackbar = useCallback((message, severity = "info") => {
     setSnackbar({ open: true, message, severity });
@@ -93,6 +96,27 @@ function PaymentsPage() {
     fetchMeta();
   }, [showSnackbar]);
 
+  // 👈 4. الدالة الجديدة لإعادة محاولة الدفع
+  const handleRetry = useCallback(
+    async (paymentId) => {
+      setIsRetrying(paymentId); // عرض مؤشر التحميل للزر المحدد
+      try {
+        const response = await retryPaymentRenewal(paymentId);
+        showSnackbar(response.message || "إعادة المحاولة بدأت بنجاح!", "success");
+        // تحديث بعد 5 ثوانٍ لإعطاء وقت للمعالجة في الخلفية
+        setTimeout(() => {
+          refreshData();
+        }, 5000);
+      } catch (err) {
+        const errorMessage = err.response?.data?.error || "فشل في بدء إعادة المحاولة.";
+        showSnackbar(errorMessage, "error");
+      } finally {
+        setIsRetrying(null); // إخفاء مؤشر التحميل
+      }
+    },
+    [refreshData, showSnackbar]
+  );
+
   const handleSort = (sortedColumn) => {
     if (sortedColumn && sortedColumn.length > 0) {
       const { id, desc } = sortedColumn[0];
@@ -112,26 +136,52 @@ function PaymentsPage() {
     }));
   }, []);
 
-  // ✅ 1. تعريف الدالة المفقودة باستخدام useCallback لتحسين الأداء
   const handleOpenUserDetails = useCallback((payment) => {
     setSelectedPayment(payment);
     setDetailsDialogOpen(true);
   }, []);
 
+  // 👈 5. تم تحديث عمود الإجراءات وإضافة isRetrying و handleRetry للاعتماديات
   const tableColumns = useMemo(() => {
     const actionColumn = {
       Header: "الإجراءات",
       accessor: "actions",
       align: "center",
       disableSortBy: true,
-      Cell: ({ row }) => (
-        <Tooltip title="View Details">
-          {/* الآن هذا الاستدعاء سيعمل بشكل صحيح */}
-          <IconButton size="small" onClick={() => handleOpenUserDetails(row.original)} color="info">
-            <VisibilityIcon fontSize="inherit" />
-          </IconButton>
-        </Tooltip>
-      ),
+      Cell: ({ row }) => {
+        const payment = row.original;
+        return (
+          <MDBox display="flex" justifyContent="center" alignItems="center" gap={0.5}>
+            <Tooltip title="عرض التفاصيل">
+              <IconButton size="small" onClick={() => handleOpenUserDetails(payment)} color="info">
+                <VisibilityIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+
+            {/* ⭐⭐⭐ إضافة الزر الجديد هنا ⭐⭐⭐ */}
+            {payment.status === "failed" && (
+              <Tooltip title="إعادة محاولة التجديد">
+                <span>
+                  {" "}
+                  {/* Span ضروري للـ Tooltip على زر معطل */}
+                  <IconButton
+                    size="small"
+                    onClick={() => handleRetry(payment.id)}
+                    color="warning"
+                    disabled={isRetrying === payment.id} // تعطيل الزر أثناء المحاولة
+                  >
+                    {isRetrying === payment.id ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <ReplayIcon fontSize="inherit" />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+          </MDBox>
+        );
+      },
     };
 
     const filteredBase = BASE_COLUMNS_CONFIG.filter((col) => visibleColumns[col.accessor]);
@@ -148,7 +198,7 @@ function PaymentsPage() {
     });
 
     return [...formattedBase, actionColumn];
-  }, [visibleColumns, handleOpenUserDetails]); // ✅ 2. إضافة الدالة إلى مصفوفة الاعتماديات
+  }, [visibleColumns, handleOpenUserDetails, isRetrying, handleRetry]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -174,7 +224,7 @@ function PaymentsPage() {
               alignItems="center"
             >
               <MDTypography variant="h6" color="white">
-                Payments Table
+                جدول المدفوعات
               </MDTypography>
               <Tooltip title="تحديث البيانات">
                 <IconButton onClick={refreshData} color="inherit" disabled={loading}>
@@ -262,6 +312,7 @@ function PaymentsPage() {
             onClose={() => setDetailsDialogOpen(false)}
             payment={selectedPayment}
             showSnackbar={showSnackbar}
+            onRetrySuccess={refreshData}
           />
         )}
 

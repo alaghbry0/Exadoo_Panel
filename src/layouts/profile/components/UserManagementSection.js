@@ -1,5 +1,6 @@
 // src/layouts/admin/components/UserManagementSection.js
-import React, { useState, useEffect } from "react"; // <-- إضافة React, useState, useEffect
+
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -9,289 +10,266 @@ import {
   TableRow,
   Paper,
   IconButton,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel /*Checkbox, ListItemText,*/, // Checkbox و ListItemText غير مستخدمة مباشرة هنا
+  Icon,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  Icon, // <-- إضافة مكونات Dialog و TextField و Icon
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  CircularProgress,
+  Switch,
+  FormControlLabel,
+  Tooltip,
 } from "@mui/material";
-import MDBox from "components/MDBox"; // <-- إضافة MDBox
-import MDTypography from "components/MDTypography"; // <-- إضافة MDTypography
-import MDButton from "components/MDButton"; // <-- إضافة MDButton
-// تأكد أن مسار services/api صحيح
+
+import MDBox from "components/MDBox";
+import MDTypography from "components/MDTypography";
+import MDButton from "components/MDButton";
+import MDSnackbar from "components/MDSnackbar";
+
 import {
   getPanelUsers,
   deletePanelUser,
   createPanelUser,
+  updatePanelUser,
   getRoles,
-  updateUserRole,
 } from "services/api";
+
+const INITIAL_USER_STATE = {
+  email: "",
+  display_name: "",
+  role_id: "",
+  telegram_id: "",
+  receives_notifications: false,
+};
 
 function UserManagementSection() {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
-  const [openAddUserModal, setOpenAddUserModal] = useState(false);
-  const [openEditUserRoleModal, setOpenEditUserRoleModal] = useState(false);
-  const [currentUserToEdit, setCurrentUserToEdit] = useState(null);
-  const [newUser, setNewUser] = useState({ email: "", displayName: "", role_id: "" });
-  const [editingUserRole, setEditingUserRole] = useState({ userId: null, role_id: "" });
-  const [loading, setLoading] = useState(true); // لإظهار مؤشر تحميل
-  const [error, setError] = useState(null); // لتخزين رسائل الخطأ
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null); // null for new, user object for editing
+  const [formData, setFormData] = useState(INITIAL_USER_STATE);
+  const [loading, setLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({ open: false, color: "info", message: "" });
 
-  const fetchUsersAndRoles = async () => {
+  const fetchUsersAndRoles = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const usersRes = await getPanelUsers();
-      // التأكد من أن usersRes.data.users مصفوفة
+      const [usersRes, rolesRes] = await Promise.all([getPanelUsers(), getRoles()]);
       setUsers(Array.isArray(usersRes.data.users) ? usersRes.data.users : []);
-
-      const rolesRes = await getRoles();
-      // التأكد من أن rolesRes.data.roles مصفوفة
       setRoles(Array.isArray(rolesRes.data.roles) ? rolesRes.data.roles : []);
     } catch (err) {
-      console.error("Error fetching data for User Management:", err);
-      setError(err.response?.data?.error || "فشل في جلب بيانات المستخدمين أو الأدوار.");
-      // يمكنك استخدام MDSnackbar هنا لعرض الخطأ
+      setSnackbar({ open: true, color: "error", message: "Failed to fetch data." });
+      console.error("Error fetching data:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUsersAndRoles();
-  }, []);
+  }, [fetchUsersAndRoles]);
 
-  const handleDeleteUser = async (userId) => {
-    if (window.confirm("هل أنت متأكد من حذف هذا المستخدم؟")) {
+  const handleOpenModal = (user = null) => {
+    setEditingUser(user);
+    if (user) {
+      setFormData({
+        email: user.email || "",
+        display_name: user.display_name || "",
+        role_id: user.role_id || "",
+        telegram_id: user.telegram_id || "",
+        receives_notifications: user.receives_notifications || false,
+      });
+    } else {
+      setFormData(INITIAL_USER_STATE);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingUser(null);
+    setFormData(INITIAL_USER_STATE);
+  };
+
+  const handleFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handleSaveUser = async () => {
+    if (!formData.email || !formData.role_id) {
+      setSnackbar({ open: true, color: "warning", message: "Email and Role are required." });
+      return;
+    }
+
+    // تجهيز البيانات للإرسال
+    const payload = {
+      ...formData,
+      role_id: parseInt(formData.role_id, 10),
+      telegram_id: formData.telegram_id ? formData.telegram_id : null,
+    };
+
+    try {
+      if (editingUser) {
+        await updatePanelUser(editingUser.id, payload);
+        setSnackbar({ open: true, color: "success", message: "User updated successfully!" });
+      } else {
+        await createPanelUser(payload);
+        setSnackbar({ open: true, color: "success", message: "User created successfully!" });
+      }
+      handleCloseModal();
+      fetchUsersAndRoles(); // إعادة تحميل البيانات
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        color: "error",
+        message: err.response?.data?.error || "An error occurred.",
+      });
+      console.error("Save user error:", err);
+    }
+  };
+
+  const handleDeleteUser = async (userId, userEmail) => {
+    if (window.confirm(`Are you sure you want to delete user ${userEmail}?`)) {
       try {
         await deletePanelUser(userId);
-        alert("تم حذف المستخدم بنجاح."); // أو استخدم MDSnackbar
+        setSnackbar({ open: true, color: "success", message: "User deleted successfully." });
         fetchUsersAndRoles();
       } catch (err) {
-        console.error("Error deleting user:", err);
-        alert(err.response?.data?.error || "فشل حذف المستخدم.");
+        setSnackbar({
+          open: true,
+          color: "error",
+          message: err.response?.data?.error || "Failed to delete user.",
+        });
       }
-    }
-  };
-
-  const handleOpenAddUserModal = () => {
-    setNewUser({ email: "", displayName: "", role_id: roles.length > 0 ? roles[0].id : "" });
-    setOpenAddUserModal(true);
-  };
-
-  const handleAddUser = async () => {
-    if (!newUser.email || !newUser.role_id) {
-      alert("البريد الإلكتروني والدور مطلوبان.");
-      return;
-    }
-    try {
-      await createPanelUser(newUser.email, newUser.displayName, parseInt(newUser.role_id, 10)); // تأكد أن role_id رقم
-      alert("تم إضافة المستخدم بنجاح.");
-      setOpenAddUserModal(false);
-      fetchUsersAndRoles();
-    } catch (err) {
-      console.error("Error adding user:", err);
-      alert(err.response?.data?.error || "فشل إضافة المستخدم. تأكد أن البريد غير مكرر.");
-    }
-  };
-
-  const handleOpenEditUserRoleModal = (user) => {
-    setCurrentUserToEdit(user);
-    setEditingUserRole({ userId: user.id, role_id: user.role_id ? String(user.role_id) : "" }); // تحويل role_id إلى string إذا كان رقمًا
-    setOpenEditUserRoleModal(true);
-  };
-
-  const handleUpdateUserRole = async () => {
-    if (!editingUserRole.role_id) {
-      alert("يرجى اختيار دور للمستخدم.");
-      return;
-    }
-    try {
-      await updateUserRole(editingUserRole.userId, parseInt(editingUserRole.role_id, 10)); // تأكد أن role_id رقم
-      alert("تم تحديث دور المستخدم بنجاح.");
-      setOpenEditUserRoleModal(false);
-      fetchUsersAndRoles();
-    } catch (err) {
-      console.error("Error updating user role:", err);
-      alert(err.response?.data?.error || "فشل تحديث دور المستخدم.");
     }
   };
 
   if (loading) {
     return (
       <MDBox p={3} display="flex" justifyContent="center">
-        <MDTypography>جار التحميل...</MDTypography>
-      </MDBox>
-    );
-  }
-
-  if (error) {
-    return (
-      <MDBox p={3} display="flex" justifyContent="center">
-        <MDTypography color="error">{error}</MDTypography>
+        <CircularProgress />
       </MDBox>
     );
   }
 
   return (
     <MDBox pt={2} pb={3}>
-      {" "}
-      {/* استخدام pt و pb بدلاً من mt={4} و p={2} لتوحيد الـ padding */}
+      <MDSnackbar
+        color={snackbar.color}
+        icon={snackbar.color === "success" ? "check" : "warning"}
+        title="User Management"
+        content={snackbar.message}
+        open={snackbar.open}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        close={() => setSnackbar({ ...snackbar, open: false })}
+        bgWhite
+      />
       <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={2} px={2}>
-        {" "}
-        {/* إضافة px للحفاظ على التباعد */}
         <MDTypography variant="h6" fontWeight="medium">
           إدارة المستخدمين
         </MDTypography>
-        <MDButton variant="gradient" color="info" onClick={handleOpenAddUserModal}>
+        <MDButton variant="gradient" color="info" onClick={() => handleOpenModal()}>
           <Icon sx={{ mr: 0.5 }}>add</Icon> إضافة مستخدم
         </MDButton>
       </MDBox>
       <TableContainer component={Paper} sx={{ mx: 2, width: "calc(100% - 32px)" }}>
-        {" "}
-        {/* إضافة mx و width لتعويض الـ padding المفقود */}
         <Table>
           <TableHead sx={{ display: "table-header-group" }}>
-            {" "}
-            {/* ضروري لـ Material UI v5 */}
             <TableRow>
-              <TableCell>الاسم المعروض</TableCell>
-              <TableCell>البريد الإلكتروني</TableCell>
+              <TableCell>المستخدم</TableCell>
               <TableCell>الدور</TableCell>
-              <TableCell>تاريخ الإنشاء</TableCell>
+              <TableCell>معرف تليجرام</TableCell>
+              <TableCell align="center">يتلقى إشعارات</TableCell>
               <TableCell align="right">الإجراءات</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {users.length > 0 ? (
-              users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>{user.display_name || "N/A"}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{user.role_name || "لم يتم التعيين"}</TableCell>
-                  <TableCell>
-                    {user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpenEditUserRoleModal(user)}
-                      color="info"
-                      title="تعديل الدور"
-                    >
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell>
+                  <MDTypography variant="subtitle2">{user.display_name || "N/A"}</MDTypography>
+                  <MDTypography variant="caption" color="text">
+                    {user.email}
+                  </MDTypography>
+                </TableCell>
+                <TableCell>{user.role_name || "N/A"}</TableCell>
+                <TableCell>{user.telegram_id || "غير محدد"}</TableCell>
+                <TableCell align="center">
+                  {user.receives_notifications ? (
+                    <Icon color="success">check_circle</Icon>
+                  ) : (
+                    <Icon color="disabled">cancel</Icon>
+                  )}
+                </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Edit User">
+                    <IconButton size="small" onClick={() => handleOpenModal(user)} color="info">
                       <Icon>edit</Icon>
                     </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete User">
                     <IconButton
                       size="small"
-                      onClick={() => handleDeleteUser(user.id)}
+                      onClick={() => handleDeleteUser(user.id, user.email)}
                       color="error"
-                      title="حذف المستخدم"
                     >
                       <Icon>delete</Icon>
                     </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} align="center">
-                  <MDTypography variant="body2">لا يوجد مستخدمون لعرضهم.</MDTypography>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
-            )}
+            ))}
           </TableBody>
         </Table>
       </TableContainer>
-      {/* Dialog لإضافة مستخدم */}
-      <Dialog
-        open={openAddUserModal}
-        onClose={() => setOpenAddUserModal(false)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle>إضافة مستخدم جديد</DialogTitle>
+
+      {/* Dialog موحد للإضافة والتعديل */}
+      <Dialog open={isModalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+        <DialogTitle>{editingUser ? "تعديل مستخدم" : "إضافة مستخدم جديد"}</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="البريد الإلكتروني"
-            type="email"
-            fullWidth
-            value={newUser.email}
-            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            margin="dense"
-            label="الاسم المعروض (اختياري)"
-            type="text"
-            fullWidth
-            value={newUser.displayName}
-            onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })}
-            sx={{ mb: 2 }}
-          />
-          <FormControl fullWidth margin="dense">
-            <InputLabel id="role-select-label-add">الدور</InputLabel>
-            <Select
-              labelId="role-select-label-add"
-              value={newUser.role_id}
-              label="الدور"
-              onChange={(e) => setNewUser({ ...newUser, role_id: e.target.value })}
-            >
-              <MenuItem value="">
-                <em>اختر دورًا</em>
-              </MenuItem>
-              {roles.map((role) => (
-                <MenuItem key={role.id} value={role.id}>
-                  {role.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <MDButton onClick={() => setOpenAddUserModal(false)} color="secondary">
-            إلغاء
-          </MDButton>
-          <MDButton onClick={handleAddUser} color="info">
-            حفظ
-          </MDButton>
-        </DialogActions>
-      </Dialog>
-      {/* Dialog لتعديل دور المستخدم */}
-      {currentUserToEdit && (
-        <Dialog
-          open={openEditUserRoleModal}
-          onClose={() => setOpenEditUserRoleModal(false)}
-          fullWidth
-          maxWidth="xs"
-        >
-          <DialogTitle>
-            تعديل دور للمستخدم: {currentUserToEdit.display_name || currentUserToEdit.email}
-          </DialogTitle>
-          <DialogContent>
-            <MDTypography variant="body2" mb={2}>
-              البريد الإلكتروني: {currentUserToEdit.email}
-            </MDTypography>
-            <FormControl fullWidth margin="dense">
-              <InputLabel id="edit-role-select-label">الدور الجديد</InputLabel>
+          <MDBox component="form" role="form" display="flex" flexDirection="column" gap={2} pt={2}>
+            <TextField
+              label="البريد الإلكتروني"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleFormChange}
+              disabled={!!editingUser}
+              fullWidth
+            />
+            <TextField
+              label="الاسم المعروض"
+              type="text"
+              name="display_name"
+              value={formData.display_name}
+              onChange={handleFormChange}
+              fullWidth
+            />
+            <TextField
+              label="معرف تليجرام (اختياري)"
+              type="number"
+              name="telegram_id"
+              value={formData.telegram_id}
+              onChange={handleFormChange}
+              fullWidth
+            />
+            <FormControl fullWidth>
+              <InputLabel>الدور</InputLabel>
               <Select
-                labelId="edit-role-select-label"
-                value={editingUserRole.role_id}
-                label="الدور الجديد"
-                onChange={(e) =>
-                  setEditingUserRole({ ...editingUserRole, role_id: e.target.value })
-                }
+                name="role_id"
+                value={formData.role_id}
+                label="الدور"
+                onChange={handleFormChange}
               >
-                <MenuItem value="">
-                  <em>اختر دورًا</em>
-                </MenuItem>
                 {roles.map((role) => (
                   <MenuItem key={role.id} value={role.id}>
                     {role.name}
@@ -299,19 +277,29 @@ function UserManagementSection() {
                 ))}
               </Select>
             </FormControl>
-          </DialogContent>
-          <DialogActions>
-            <MDButton onClick={() => setOpenEditUserRoleModal(false)} color="secondary">
-              إلغاء
-            </MDButton>
-            <MDButton onClick={handleUpdateUserRole} color="info">
-              تحديث الدور
-            </MDButton>
-          </DialogActions>
-        </Dialog>
-      )}
+            <FormControlLabel
+              control={
+                <Switch
+                  name="receives_notifications"
+                  checked={formData.receives_notifications}
+                  onChange={handleFormChange}
+                />
+              }
+              label="تلقي إشعارات النظام الحرجة"
+            />
+          </MDBox>
+        </DialogContent>
+        <DialogActions>
+          <MDButton onClick={handleCloseModal} color="secondary">
+            إلغاء
+          </MDButton>
+          <MDButton onClick={handleSaveUser} color="info" variant="gradient">
+            حفظ
+          </MDButton>
+        </DialogActions>
+      </Dialog>
     </MDBox>
   );
 }
 
-export default UserManagementSection; // <-- إضافة التصدير الافتراضي
+export default UserManagementSection;
