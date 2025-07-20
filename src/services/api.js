@@ -164,6 +164,14 @@ export const getSubscriptions = async (filters = {}) => {
   return response.data;
 };
 
+export const exportSubscriptionsToExcel = async (exportOptions) => {
+  const response = await apiClient.post("/api/admin/subscriptions/export", exportOptions, {
+    responseType: "blob",
+  });
+  // 1. فقط قم بإرجاع البيانات الخام (blob)
+  return response.data;
+};
+
 export const getPayments = async (filters = {}) => {
   const response = await apiClient.get("/api/admin/payments", { params: filters });
   return response.data;

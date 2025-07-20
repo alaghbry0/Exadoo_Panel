@@ -1,10 +1,11 @@
 // /src/layouts/tables/index.js
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useLocation } from "react-router-dom"; // ✅ 1. تم استيراد useLocation
-import debounce from "lodash.debounce"; // استيراد Debounce لتحسين البحث
-import { Card, CircularProgress, Snackbar, IconButton, Tooltip, Grid } from "@mui/material";
+import { useLocation } from "react-router-dom";
+import debounce from "lodash.debounce";
+import { Card, CircularProgress, Snackbar, IconButton, Tooltip, Grid, Box } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
 import MDBox from "components/MDBox";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -24,18 +25,19 @@ import SubscriptionFormModal from "./components/SubscriptionFormModal";
 import CustomAlert from "./components/common/CustomAlert";
 import SubscriptionsTabContent from "./components/SubscriptionsTabContent";
 import SubscriptionHistoryTabContent from "./components/SubscriptionHistoryTabContent";
+import ExportSubscriptionsDialog from "./components/ExportSubscriptionsDialog";
 
 // API
 import {
   getSubscriptionsMeta,
   addOrRenewSubscriptionAdmin,
   updateSubscriptionAdmin,
+  exportSubscriptionsToExcel,
 } from "services/api";
 
 function Tables() {
-  const location = useLocation(); // ✅ 2. تهيئة useLocation
+  const location = useLocation();
 
-  // دالة مساعدة لقراءة قيمة من search params
   const getSearchParam = (paramName) => {
     const params = new URLSearchParams(location.search);
     return params.get(paramName) || "";
@@ -46,9 +48,8 @@ function Tables() {
   const [formModalMode, setFormModalMode] = useState("add_or_renew");
   const [editingSubscription, setEditingSubscription] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
-
-  // ✅ 3. تهيئة globalSearchTerm بالقيمة من الرابط
   const [globalSearchTerm, setGlobalSearchTerm] = useState(() => getSearchParam("search"));
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const showSnackbar = useCallback((message, severity = "info") => {
     setSnackbar({ open: true, message, severity });
@@ -59,7 +60,7 @@ function Tables() {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
-  // --- Hook for Subscriptions Tab (Tab 0) ---
+  // --- Hooks for Data ---
   const {
     subscriptions,
     loading: subsLoading,
@@ -72,9 +73,8 @@ function Tables() {
     customFilters: subsCustomFilters,
     handleCustomFilterChange: handleSubsCustomFilterChange,
     fetchData: fetchSubscriptionsDataHook,
-  } = useSubscriptions(showSnackbar, globalSearchTerm); // ✅ 4. تم تمرير globalSearchTerm
+  } = useSubscriptions(showSnackbar, globalSearchTerm);
 
-  // --- Hook for Subscription History Tab (Tab 1) ---
   const {
     historyData,
     loading: historyLoading,
@@ -86,7 +86,7 @@ function Tables() {
     customFilters: historyCustomFilters,
     handleCustomFilterChange: handleHistoryCustomFilterChange,
     fetchData: fetchHistoryDataHook,
-  } = useSubscriptionHistory(showSnackbar, globalSearchTerm); // ✅ 4. تم تمرير globalSearchTerm
+  } = useSubscriptionHistory(showSnackbar, globalSearchTerm);
 
   const [subscriptionTypes, setSubscriptionTypes] = useState([]);
   const [subscriptionPlans, setSubscriptionPlans] = useState([]);
@@ -106,31 +106,25 @@ function Tables() {
     fetchFilterMetadata();
   }, [showSnackbar]);
 
-  // ✅ 5. useEffect لمزامنة التغييرات في الرابط مع حالة البحث
   useEffect(() => {
     const newSearch = getSearchParam("search");
-    // إذا كانت قيمة البحث الجديدة مختلفة عن الحالية
     if (newSearch !== globalSearchTerm) {
-      // إذا كان هناك بحث جديد قادم من الخارج، انتقل إلى التبويب الأول (الاشتراكات النشطة)
       if (newSearch) {
         setActiveTab(0);
       }
       setGlobalSearchTerm(newSearch);
     }
-  }, [location.search]); // يعتمد على تغييرات الرابط
+  }, [location.search, globalSearchTerm]);
 
-  // --- دالة بحث محسّنة باستخدام debounce ---
   const handleGlobalSearchChange = useCallback(
     debounce((value) => {
       setGlobalSearchTerm(value);
-    }, 400), // انتظر 400ms بعد توقف المستخدم عن الكتابة
-    [] // تأكد من أن الدالة لا يُعاد إنشاؤها في كل مرة
+    }, 400),
+    []
   );
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
-    // يمكنك اختيار مسح البحث عند التبديل بين التبويبات أو إبقائه
-    // setGlobalSearchTerm("");
   };
 
   const handleRefreshData = useCallback(async () => {
@@ -173,12 +167,46 @@ function Tables() {
         showSnackbar("Subscription added/renewed successfully!", "success");
       }
       handleCloseModal();
-      await handleRefreshData(); // استدعاء await هنا لضمان التحديث قبل أي شيء آخر
+      await handleRefreshData();
     } catch (err) {
       const errorMessage = err.response?.data?.error || err.message || "Error processing form";
       showSnackbar(errorMessage, "error");
     }
   };
+
+  const handleOpenExportDialog = useCallback(() => setExportDialogOpen(true), []);
+  const handleCloseExportDialog = useCallback(() => setExportDialogOpen(false), []);
+
+  // ⭐ 1. تعديل دالة handleExportSubmit لتكون أبسط
+  const handleExportSubmit = useCallback(
+    async (payload) => {
+      // الآن تستقبل الحمولة الكاملة من النافذة
+      showSnackbar("Generating your Excel file, please wait...", "info");
+
+      try {
+        const blob = await exportSubscriptionsToExcel(payload); // تمرير الحمولة مباشرة للـ API
+
+        const url = window.URL.createObjectURL(new Blob([blob]));
+        const link = document.createElement("a");
+        link.href = url;
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, "");
+        link.setAttribute("download", `subscriptions_export_${timestamp}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        showSnackbar("Excel file downloaded successfully!", "success");
+        // لا داعي لإغلاق النافذة هنا، فهي تغلق نفسها
+      } catch (err) {
+        const errorMessage =
+          err.response?.data?.error || err.response?.data?.message || "Error exporting data";
+        showSnackbar(errorMessage, "error");
+        // لا تغلق النافذة في حالة الخطأ لكي يرى المستخدم رسالة الخطأ
+      }
+    },
+    [showSnackbar] // الاعتماديات الآن أبسط
+  );
 
   const isAnyLoading = useMemo(() => subsLoading || historyLoading, [subsLoading, historyLoading]);
   const currentTabSpinnerOnRefresh = useMemo(() => {
@@ -193,7 +221,7 @@ function Tables() {
         <DashboardNavbar
           onSearchChange={handleGlobalSearchChange}
           searchLabel={activeTab === 0 ? "بحث في الاشتراكات..." : "بحث في السجل..."}
-          initialValue={globalSearchTerm} // ✅ 6. تمرير القيمة الأولية لشريط البحث
+          initialValue={globalSearchTerm}
         />
         <MDBox pt={6} pb={3}>
           <Grid container spacing={3}>
@@ -215,6 +243,30 @@ function Tables() {
                   <MDTypography variant="h6" color="white">
                     إدارة الاشتراكات
                   </MDTypography>
+                  <MDBox display="flex" alignItems="center" gap={1}>
+                    <Tooltip title="تصدير البيانات الحالية">
+                      <Box component="span">
+                        <IconButton
+                          onClick={handleOpenExportDialog}
+                          sx={{ color: "white" }}
+                          disabled={isAnyLoading || (activeTab === 0 && subscriptions.length === 0)}
+                        >
+                          <FileDownloadIcon />
+                        </IconButton>
+                      </Box>
+                    </Tooltip>
+                    <Tooltip title="تحديث البيانات">
+                      <Box component="span">
+                        <IconButton onClick={handleRefreshData} disabled={isAnyLoading}>
+                          {currentTabSpinnerOnRefresh ? (
+                            <CircularProgress size={24} color="inherit" />
+                          ) : (
+                            <RefreshIcon sx={{ color: "white" }} />
+                          )}
+                        </IconButton>
+                      </Box>
+                    </Tooltip>
+                  </MDBox>
                 </MDBox>
 
                 <MDBox
@@ -227,15 +279,6 @@ function Tables() {
                   sx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}
                 >
                   <TabsManager activeTab={activeTab} handleTabChange={handleTabChange} />
-                  <Tooltip title="تحديث البيانات">
-                    <IconButton onClick={handleRefreshData} color="info" disabled={isAnyLoading}>
-                      {currentTabSpinnerOnRefresh ? (
-                        <CircularProgress size={24} color="inherit" />
-                      ) : (
-                        <RefreshIcon />
-                      )}
-                    </IconButton>
-                  </Tooltip>
                 </MDBox>
 
                 {activeTab === 0 && (
@@ -289,6 +332,19 @@ function Tables() {
           availableSources={availableSources.map((s) => s.value)}
           mode={formModalMode}
         />
+
+        {/* ⭐ 2. تحديث استدعاء نافذة التصدير لتمرير الخصائص المطلوبة */}
+        {exportDialogOpen && (
+          <ExportSubscriptionsDialog
+            open={exportDialogOpen}
+            onClose={handleCloseExportDialog}
+            onSubmit={handleExportSubmit}
+            currentSearchTerm={globalSearchTerm} // تمرير البحث الحالي كقيمة افتراضية
+            subscriptionTypes={subscriptionTypes}
+            subscriptionPlans={subscriptionPlans}
+            availableSources={availableSources}
+          />
+        )}
 
         <Snackbar
           open={snackbar.open}

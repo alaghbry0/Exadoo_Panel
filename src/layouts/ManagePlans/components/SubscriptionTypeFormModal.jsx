@@ -64,7 +64,7 @@ const INITIAL_FORM_DATA = {
   groupId: "",
   sortOrder: 0,
   isRecommended: false,
-  usp: "",
+  description: "",
   sendInvites: false,
   // description: "", // إذا كنت ستضيف حقل وصف
 };
@@ -146,7 +146,7 @@ const getInitialFormDataState = (initialData, isEditMode, parseJsonFn) => {
       groupId: initialData.group?.id?.toString() || initialData.group_id?.toString() || "",
       sortOrder: initialData.sort_order ?? 0,
       isRecommended: initialData.is_recommended ?? false,
-      usp: initialData.usp || "",
+      description: initialData.description || "",
       sendInvites: initialData.send_invites_for_new_channels ?? false,
       // description: initialData.description || "", // إذا كنت ستضيف حقل وصف
     };
@@ -201,7 +201,7 @@ const prepareApiPayload = (formData, imageDetails, isEditMode) => {
     sort_order: parseInt(formData.sortOrder, 10) || 0, // الخادم يتوقع sort_order
     is_active: formData.isActive, // الخادم يتوقع is_active
     is_recommended: formData.isRecommended, // الخادم يتوقع is_recommended
-    usp: formData.usp.trim() || null,
+    description: formData.description.trim() || null,
     image_url: imageDetails.finalImageUrlToSave,
     image_file_id: imageDetails.deleteImageFlag ? null : imageDetails.uploadedFileId,
     delete_image: imageDetails.deleteImageFlag,
@@ -538,30 +538,18 @@ function SubscriptionTypeFormModal({
                 inputProps={{ min: 0 }}
               />
               <MDInput
-                label="نقطة البيع الفريدة (USP)"
-                name="usp"
-                fullWidth
-                value={formData.usp}
-                onChange={handleChange}
-                disabled={isSaving || isUploading}
-                variant="outlined"
-                placeholder="مثال: أفضل قيمة للعائلات"
-              />
-              {/* إذا كنت ستضيف حقل وصف:
-              <MDInput
                 sx={{ mt: 2 }}
                 label="الوصف (اختياري)"
                 name="description"
                 fullWidth
                 multiline
-                rows={3}
+                rows={4}
                 value={formData.description}
                 onChange={handleChange}
                 disabled={isSaving || isUploading}
                 variant="outlined"
                 placeholder="أدخل وصفًا موجزًا لنوع الاشتراك..."
               />
-              */}
             </Grid>
 
             {/* --- عمود للصورة والتحويلات --- */}
