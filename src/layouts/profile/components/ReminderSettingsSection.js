@@ -45,13 +45,14 @@ function ReminderSettingsSection() {
   useEffect(() => {
     const loadSettings = async () => {
       setLoading(true);
-      setErrorSB(false); // أغلق أي خطأ سابق عند محاولة التحميل
+      setErrorSB(false);
       try {
         const response = await fetchReminderSettings();
         if (response.data) {
+          // تصحيح: استخدام الأسماء الصحيحة المتطابقة مع الخادم
           setSettings({
-            first_reminder: response.data.first_reminder_hours ?? 24,
-            second_reminder: response.data.second_reminder_hours ?? 72,
+            first_reminder: response.data.first_reminder ?? 24,
+            second_reminder: response.data.second_reminder ?? 72,
             first_reminder_message:
               response.data.first_reminder_message ||
               "📢 تنبيه: اشتراكك سينتهي في {expiry_date} بتوقيت الرياض. يرجى التجديد.",
@@ -77,9 +78,10 @@ function ReminderSettingsSection() {
     if (errorSB) setErrorSB(false);
     setUpdating(true);
     try {
+      // تصحيح: تم تغيير أسماء الحقول لتطابق ما يتوقعه الخادم
       await updateReminderSettings({
-        first_reminder_hours: parseInt(settings.first_reminder, 10),
-        second_reminder_hours: parseInt(settings.second_reminder, 10),
+        first_reminder: parseInt(settings.first_reminder, 10),
+        second_reminder: parseInt(settings.second_reminder, 10),
         first_reminder_message: settings.first_reminder_message,
         second_reminder_message: settings.second_reminder_message,
       });
