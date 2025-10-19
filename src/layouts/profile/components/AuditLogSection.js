@@ -15,21 +15,12 @@ import Alert from "@mui/material/Alert";
 import Link from "@mui/material/Link";
 import Modal from "@mui/material/Modal";
 import MDButton from "components/MDButton";
+import TextField from "@mui/material/TextField";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 
 const modalStyle = {
-  position: "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  width: "80%",
-  maxWidth: 700,
-  bgcolor: "background.paper",
-  border: "1px solid #ddd",
-  borderRadius: "8px",
-  boxShadow: 24,
-  p: { xs: 2, sm: 3, md: 4 },
-  maxHeight: "90vh",
-  overflowY: "auto",
+  /* ... كما لديك ... */
 };
 
 const INITIAL_PAGE_SIZE_AUDIT = 10;
@@ -45,18 +36,40 @@ function AuditLogSection() {
   const [currentPageApi, setCurrentPageApi] = useState(1);
   const [pageSizeApi, setPageSizeApi] = useState(INITIAL_PAGE_SIZE_AUDIT);
 
+  // --- فلاتر ---
+  const [userEmailFilter, setUserEmailFilter] = useState("");
+  const [actionFilter, setActionFilter] = useState("");
+  const [resourceFilter, setResourceFilter] = useState("");
+  const [resourceIdFilter, setResourceIdFilter] = useState("");
+  const [fromDateFilter, setFromDateFilter] = useState("");
+  const [toDateFilter, setToDateFilter] = useState("");
+  const [hasChangedFilter, setHasChangedFilter] = useState(""); // "", "true", "false"
+
   const currentPageTable = useMemo(() => currentPageApi - 1, [currentPageApi]);
 
   const showSnackbar = useCallback((message, severity = "info") => {
     setSnackbar({ open: true, message, severity });
   }, []);
 
+  const buildFiltersObj = () => {
+    const f = {};
+    if (userEmailFilter) f.user_email = userEmailFilter;
+    if (actionFilter) f.action = actionFilter;
+    if (resourceFilter) f.resource = resourceFilter;
+    if (resourceIdFilter) f.resource_id = resourceIdFilter;
+    if (fromDateFilter) f.from_date = fromDateFilter;
+    if (toDateFilter) f.to_date = toDateFilter;
+    if (hasChangedFilter) f.has_changed_fields = hasChangedFilter;
+    return f;
+  };
+
   const fetchData = useCallback(
     async (page, pageSize) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await getAuditLogs(page, pageSize);
+        const filters = buildFiltersObj();
+        const response = await getAuditLogs(page, pageSize, filters);
         if (response && response.data) {
           setAuditLogsData(response.data.logs || []);
           setTotalRecords(response.data.pagination?.total || 0);
@@ -80,23 +93,46 @@ function AuditLogSection() {
         setLoading(false);
       }
     },
-    [showSnackbar]
+    [
+      showSnackbar,
+      userEmailFilter,
+      actionFilter,
+      resourceFilter,
+      resourceIdFilter,
+      fromDateFilter,
+      toDateFilter,
+      hasChangedFilter,
+    ]
   );
 
   useEffect(() => {
     fetchData(currentPageApi, pageSizeApi);
   }, [currentPageApi, pageSizeApi, fetchData]);
 
+  const handleSearch = () => {
+    setCurrentPageApi(1);
+    fetchData(1, pageSizeApi);
+  };
+
+  const handleClearFilters = () => {
+    setUserEmailFilter("");
+    setActionFilter("");
+    setResourceFilter("");
+    setResourceIdFilter("");
+    setFromDateFilter("");
+    setToDateFilter("");
+    setHasChangedFilter("");
+    setCurrentPageApi(1);
+    fetchData(1, pageSizeApi);
+  };
+
   const handleRefresh = () => {
     fetchData(currentPageApi, pageSizeApi);
     showSnackbar("تم تحديث بيانات سجل التدقيق بنجاح", "success");
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar((prev) => ({ ...prev, open: false }));
-  };
-
-  const handleOpenModal = (detailsObject) => {
+  const handleOpenModal = (detailsObject, fullUrl = null, before = null, after = null) => {
+    // إذا كان detailsObject عبارة عن مقتطف أو كائن يشير إلى رابط خارجي، نحاول جلبه عند الحاجة
     let parsedDetails = detailsObject;
     if (typeof detailsObject === "string") {
       try {
@@ -105,7 +141,7 @@ function AuditLogSection() {
         parsedDetails = detailsObject;
       }
     }
-    setModalContent(parsedDetails);
+    setModalContent({ details: parsedDetails, external_url: fullUrl, before, after });
     setOpenModal(true);
   };
 
@@ -125,8 +161,8 @@ function AuditLogSection() {
 
   const renderCellContent = (content, placeholder = "-") => content || placeholder;
 
+  // snippet for details - unchanged mostly, but show external link
   const renderDetailsSnippet = (details) => {
-    // تم إزالة 'action' لأنه غير مستخدم هنا
     if (details === null || details === undefined) return "-";
     let detailsObj = details;
     if (typeof details === "string") {
@@ -135,14 +171,29 @@ function AuditLogSection() {
       } catch (e) {
         return (
           <MDTypography variant="caption" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-            {String(details).substring(0, 50)}
-            {String(details).length > 50 ? "..." : ""}
+            {String(details).substring(0, 80)}
+            {String(details).length > 80 ? "..." : ""}
           </MDTypography>
         );
       }
     }
     if (typeof detailsObj !== "object" || detailsObj === null) {
-      return String(detailsObj).substring(0, 50) + (String(detailsObj).length > 50 ? "..." : "");
+      return String(detailsObj).substring(0, 80) + (String(detailsObj).length > 80 ? "..." : "");
+    }
+    // external link case
+    if (detailsObj._external_link) {
+      return (
+        <MDTypography variant="caption" noWrap>
+          External JSON:{" "}
+          <Link
+            component="button"
+            variant="caption"
+            onClick={() => handleOpenModal(detailsObj, detailsObj._external_link)}
+          >
+            فتح الملف
+          </Link>
+        </MDTypography>
+      );
     }
     const keys = Object.keys(detailsObj);
     if (keys.length > 0) {
@@ -150,8 +201,8 @@ function AuditLogSection() {
       const firstValue = String(detailsObj[firstKey]);
       return (
         <MDTypography variant="caption" noWrap>
-          <strong>{firstKey}:</strong> {firstValue.substring(0, 30)}
-          {firstValue.length > 30 ? "..." : ""}
+          <strong>{firstKey}:</strong> {firstValue.substring(0, 40)}
+          {firstValue.length > 40 ? "..." : ""}
         </MDTypography>
       );
     }
@@ -174,7 +225,7 @@ function AuditLogSection() {
                 hour12: true,
               })
             : "-",
-        width: "15%",
+        width: "14%",
       },
       {
         Header: "المستخدم",
@@ -197,18 +248,37 @@ function AuditLogSection() {
         Cell: ({ value }) => renderCellContent(value),
       },
       {
+        Header: "التغييرات",
+        accessor: "changed_summary",
+        Cell: ({ value }) => (
+          <MDTypography
+            variant="caption"
+            sx={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: 220,
+            }}
+          >
+            {value || "-"}
+          </MDTypography>
+        ),
+        width: "20%",
+      },
+      {
         Header: "التفاصيل",
         accessor: "details",
         Cell: ({ row }) => {
           const log = row.original;
           return (
-            <MDBox sx={{ maxWidth: 250, overflow: "hidden" }}>
+            <MDBox sx={{ maxWidth: 260, overflow: "hidden" }}>
               {renderDetailsSnippet(log.details)}{" "}
-              {/* تم إزالة log.action لأنه غير مستخدم في renderDetailsSnippet */}
               <Link
                 component="button"
                 variant="caption"
-                onClick={() => handleOpenModal(log.details)}
+                onClick={() =>
+                  handleOpenModal(log.details, log.external_url, log.before, log.after)
+                }
                 sx={{ fontSize: "0.7rem", mt: 0.5, display: "block", textAlign: "right" }}
               >
                 عرض التفاصيل الكاملة
@@ -216,9 +286,14 @@ function AuditLogSection() {
             </MDBox>
           );
         },
-        width: "25%",
+        width: "24%",
       },
-      { Header: "IP", accessor: "ip_address", Cell: ({ value }) => renderCellContent(value) },
+      {
+        Header: "IP",
+        accessor: "ip_address",
+        Cell: ({ value }) => renderCellContent(value),
+        width: "8%",
+      },
       {
         Header: "User Agent",
         accessor: "user_agent",
@@ -242,7 +317,7 @@ function AuditLogSection() {
           ) : (
             "-"
           ),
-        width: "15%",
+        width: "12%",
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,40 +334,77 @@ function AuditLogSection() {
   return (
     <Fragment>
       <MDBox pt={3} pb={3}>
-        {" "}
-        {/* تم تعديل الـ padding العلوي ليناسب عدم وجود Navbar */}
+        <Grid container spacing={2} sx={{ mb: 2, alignItems: "center" }}>
+          <Grid item xs={12} md={10}>
+            <Box display="flex" flexWrap="wrap" gap={1}>
+              <TextField
+                label="بريد المستخدم"
+                value={userEmailFilter}
+                onChange={(e) => setUserEmailFilter(e.target.value)}
+                size="small"
+              />
+              <TextField
+                label="الإجراء"
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value)}
+                size="small"
+              />
+              <TextField
+                label="المورد"
+                value={resourceFilter}
+                onChange={(e) => setResourceFilter(e.target.value)}
+                size="small"
+              />
+              <TextField
+                label="معرّف المورد"
+                value={resourceIdFilter}
+                onChange={(e) => setResourceIdFilter(e.target.value)}
+                size="small"
+              />
+              <TextField
+                label="من تاريخ (YYYY-MM-DD)"
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+                size="small"
+              />
+              <TextField
+                label="إلى تاريخ (YYYY-MM-DD)"
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+                size="small"
+              />
+              <TextField
+                label="Has Changes (true/false)"
+                value={hasChangedFilter}
+                onChange={(e) => setHasChangedFilter(e.target.value)}
+                size="small"
+              />
+              <Button variant="contained" color="info" onClick={handleSearch}>
+                بحث
+              </Button>
+              <Button variant="outlined" color="secondary" onClick={handleClearFilters}>
+                مسح
+              </Button>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={2} sx={{ textAlign: "right" }}>
+            <IconButton onClick={handleRefresh}>
+              <RefreshIcon />
+            </IconButton>
+          </Grid>
+        </Grid>
+
         <Grid container spacing={3}>
-          {" "}
-          {/* يمكن تعديل spacing إذا لزم الأمر */}
           <Grid item xs={12}>
             <Card>
               <MDBox pt={3} sx={{ position: "relative" }}>
-                {loading && auditLogsData.length > 0 && (
-                  <MDBox
-                    sx={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: "rgba(255, 255, 255, 0.7)",
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      zIndex: 10,
-                      borderRadius: "inherit",
-                    }}
-                  >
-                    <CircularProgress color="info" />
-                  </MDBox>
-                )}
                 {loading && auditLogsData.length === 0 && !error && (
                   <MDBox
                     display="flex"
                     justifyContent="center"
                     alignItems="center"
                     py={4}
-                    minHeight="300px"
+                    minHeight="200px"
                   >
                     <CircularProgress color="info" />
                     <MDTypography variant="body2" color="text" ml={2}>
@@ -306,7 +418,7 @@ function AuditLogSection() {
                     justifyContent="center"
                     alignItems="center"
                     py={4}
-                    minHeight="300px"
+                    minHeight="200px"
                   >
                     <MDTypography variant="h6" color="error">
                       {error}
@@ -319,7 +431,7 @@ function AuditLogSection() {
                     justifyContent="center"
                     alignItems="center"
                     py={4}
-                    minHeight="300px"
+                    minHeight="200px"
                   >
                     <MDTypography variant="h6" color="textSecondary">
                       لا توجد سجلات تدقيق لعرضها.
@@ -373,10 +485,28 @@ function AuditLogSection() {
                   direction: "ltr",
                 }}
               >
-                {typeof modalContent === "object"
-                  ? JSON.stringify(modalContent, null, 2)
-                  : String(modalContent)}
+                {modalContent.external_url
+                  ? `البيانات مخزّنة خارجيًا: ${modalContent.external_url}\n\n` +
+                    (modalContent.details && typeof modalContent.details === "object"
+                      ? JSON.stringify(modalContent.details, null, 2)
+                      : String(modalContent.details))
+                  : modalContent.details && typeof modalContent.details === "object"
+                  ? JSON.stringify(modalContent.details, null, 2)
+                  : String(modalContent.details)}
               </pre>
+              {modalContent.external_url && (
+                <Box mt={2} display="flex" justifyContent="flex-end">
+                  <MDButton
+                    component="a"
+                    href={modalContent.external_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="contained"
+                  >
+                    فتح الملف الخارجي
+                  </MDButton>
+                </Box>
+              )}
             </MDBox>
           )}
           <MDBox mt={3} display="flex" justifyContent="flex-end">
@@ -390,10 +520,14 @@ function AuditLogSection() {
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: "100%" }}>
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

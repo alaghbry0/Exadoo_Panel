@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -6,14 +6,15 @@ import DialogActions from "@mui/material/DialogActions";
 import { styled, useTheme } from "@mui/material/styles";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Grid from "@mui/material/Grid";
+
 import MDBox from "components/MDBox";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-import { createSubscriptionPlan } from "services/api";
-import Grid from "@mui/material/Grid"; // استيراد Grid للتنسيق
 
-// Styled components لضبط التنسيق
+import { createSubscriptionPlan } from "services/api";
+
 const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
   "&.MuiDialogTitle-root": {
     padding: theme.spacing(3),
@@ -38,38 +39,65 @@ const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
 }));
 
 function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdded }) {
+  const theme = useTheme();
+
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [originalPrice, setOriginalPrice] = useState(""); // إضافة حالة للسعر الأصلي
+  const [originalPrice, setOriginalPrice] = useState("");
   const [durationDays, setDurationDays] = useState("");
   const [telegramStarsPrice, setTelegramStarsPrice] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const theme = useTheme();
+  const [isTrial, setIsTrial] = useState(false);
+
+  // لو الخطة تجريبية: بنثبت السعر على 0 ونقفل الحقول
+  useEffect(() => {
+    if (isTrial) {
+      setPrice("0");
+      setOriginalPrice("0");
+      if (!durationDays) setDurationDays("14"); // quality-of-life: افتراضي 14 يوم
+    }
+  }, [isTrial, durationDays]);
 
   const handleSubmit = async () => {
+    if (!name.trim()) {
+      alert("Plan name is required");
+      return;
+    }
+    if (!durationDays || Number.isNaN(Number(durationDays)) || Number(durationDays) <= 0) {
+      alert("Duration must be a positive number");
+      return;
+    }
+    if (!isTrial && (price === "" || Number(price) <= 0)) {
+      alert("For non-trial plans, price must be > 0");
+      return;
+    }
+
     const data = {
       subscription_type_id: subscriptionTypeId,
-      name,
-      price: parseFloat(price),
-      original_price: originalPrice ? parseFloat(originalPrice) : parseFloat(price), // استخدام السعر نفسه إذا لم يتم تحديد سعر أصلي
+      name: name.trim(),
+      price: parseFloat(isTrial ? "0" : price),
+      original_price: parseFloat(isTrial ? "0" : originalPrice ? originalPrice : price),
       duration_days: parseInt(durationDays, 10),
       telegram_stars_price: parseInt(telegramStarsPrice, 10) || 0,
       is_active: isActive,
+      is_trial: isTrial,
     };
+
     try {
       const newPlan = await createSubscriptionPlan(data);
       onPlanAdded(newPlan);
       onClose();
-      // إعادة تعيين الحقول بعد الإضافة الناجحة
+      // reset
       setName("");
       setPrice("");
       setOriginalPrice("");
       setDurationDays("");
       setTelegramStarsPrice("");
       setIsActive(true);
+      setIsTrial(false);
     } catch (error) {
       console.error("Error creating subscription plan", error);
-      alert("Failed to add new subscription plan. Please check the form and try again.");
+      alert(error?.response?.data?.error || "Failed to add new subscription plan.");
     }
   };
 
@@ -80,6 +108,7 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
           Add New Subscription Plan
         </MDTypography>
       </StyledDialogTitle>
+
       <StyledDialogContent>
         <MDBox component="form" noValidate sx={{ mt: 2 }}>
           <MDInput
@@ -92,7 +121,6 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
             margin="dense"
           />
 
-          {/* قسم الأسعار */}
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
               <MDInput
@@ -104,7 +132,8 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
                 onChange={(e) => setOriginalPrice(e.target.value)}
                 InputLabelProps={{ style: { fontWeight: "bold" } }}
                 margin="dense"
-                helperText="Price before discount"
+                helperText={isTrial ? "Disabled for trial" : "Price before discount"}
+                disabled={isTrial}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -117,7 +146,10 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
                 onChange={(e) => setPrice(e.target.value)}
                 InputLabelProps={{ style: { fontWeight: "bold" } }}
                 margin="dense"
-                helperText="Price after discount (if applicable)"
+                helperText={
+                  isTrial ? "Trial plans are always $0" : "Price after discount (if applicable)"
+                }
+                disabled={isTrial}
               />
             </Grid>
           </Grid>
@@ -142,6 +174,7 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
             InputLabelProps={{ style: { fontWeight: "bold" } }}
             margin="dense"
           />
+
           <FormControlLabel
             control={
               <Checkbox
@@ -157,8 +190,25 @@ function AddSubscriptionPlanModal({ open, onClose, subscriptionTypeId, onPlanAdd
             }
             sx={{ mt: 2, color: theme.palette.text.primary }}
           />
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isTrial}
+                onChange={(e) => setIsTrial(e.target.checked)}
+                color="secondary"
+              />
+            }
+            label={
+              <MDTypography variant="body2" fontWeight="bold">
+                Trial (free / once)
+              </MDTypography>
+            }
+            sx={{ color: theme.palette.text.primary }}
+          />
         </MDBox>
       </StyledDialogContent>
+
       <StyledDialogActions>
         <MDButton onClick={onClose} color="secondary" variant="outlined">
           Cancel

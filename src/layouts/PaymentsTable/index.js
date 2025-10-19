@@ -106,7 +106,7 @@ function PaymentsPage() {
         // تحديث بعد 5 ثوانٍ لإعطاء وقت للمعالجة في الخلفية
         setTimeout(() => {
           refreshData();
-        }, 5000);
+        }, 3000);
       } catch (err) {
         const errorMessage = err.response?.data?.error || "فشل في بدء إعادة المحاولة.";
         showSnackbar(errorMessage, "error");

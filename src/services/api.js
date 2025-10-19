@@ -152,8 +152,19 @@ export const createRole = (name, description, permissionIds) =>
 /** صلاحيات المستخدم الحالي وسجل التدقيق **/
 export const getMyPermissions = () => apiClient.get("/api/permissions/my-permissions");
 
-export const getAuditLogs = (page = 1, limit = 25) =>
-  apiClient.get(`/api/permissions/audit-logs?page=${page}&limit=${limit}`);
+export const getAuditLogs = async (page = 1, limit = 25, filters = {}) => {
+  // إنشاء كائن Parameters الذي سيتم إرساله مع الطلب
+  const params = {
+    page,
+    limit,
+    ...filters, // دمج جميع الفلاتر المرسلة مع معلمات الترقيم
+  };
+
+  // سيقوم Axios (أو apiClient) بتحويل كائن `params` تلقائيًا
+  // إلى سلسلة استعلام في عنوان URL، مثل:
+  // /api/permissions/audit-logs?page=1&limit=25&action=LOGIN_SUCCESS&user_email=...
+  return apiClient.get("/api/permissions/audit-logs", { params });
+};
 
 // =================================================================
 // SECTION: إدارة الاشتراكات، الدفعات، والمعاملات

@@ -125,7 +125,7 @@ function ChatbotSettings() {
     // Hide notification after 3 seconds
     setTimeout(() => {
       setAlertInfo({ show: false, message: "", color: "info" });
-    }, 3000);
+    }, 5000);
   };
 
   // Show error message

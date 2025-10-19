@@ -1,6 +1,3 @@
-// src/layouts/ManagePlans/components/SubscriptionTypeCard.jsx
-
-// ------------------- Imports -------------------
 import React, { useState } from "react";
 import {
   Card,
@@ -11,28 +8,25 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
+  Chip,
 } from "@mui/material";
 import Icon from "@mui/material/Icon";
 import LinkIcon from "@mui/icons-material/Link";
 import StarIcon from "@mui/icons-material/Star";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 
-// Components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 
-// --- [تغيير 1]: حذف getSubscriptionPlans. لا حاجة لجلب الخطط هنا ---
 import { deleteSubscriptionPlan, deleteSubscriptionType } from "services/api";
 
-// --- [تغيير 2]: حذف SubscriptionTypeFormModal. الأب هو المسؤول عنه ---
 import AddSubscriptionPlanModal from "./AddSubscriptionPlanModal";
 import EditSubscriptionPlanModal from "./EditSubscriptionPlanModal";
 import ConfirmDeleteDialog from "./SubscriptionDelete";
-import BatchStatusIndicator from "./BatchStatusIndicator"; // <-- [تعديل جديد] استيراد المكون الجديد
+import BatchStatusIndicator from "./BatchStatusIndicator";
 
-// ------------------- Helper Functions -------------------
-// دالة مساعدة لتحليل JSON بأمان (تبقى كما هي)
+// JSON safe
 const parseJsonSafe = (jsonString) => {
   if (Array.isArray(jsonString)) return jsonString;
   if (typeof jsonString === "string") {
@@ -46,9 +40,6 @@ const parseJsonSafe = (jsonString) => {
   return [];
 };
 
-// ------------------- Component -------------------
-// --- [تغيير 3]: قبول props جديدة: plans, onDataChange, onEdit ---
-// <-- [تعديل جديد] إضافة batchStatus و onStatusClick إلى الـ props
 function SubscriptionTypeCard({
   subscriptionType,
   plans,
@@ -58,11 +49,6 @@ function SubscriptionTypeCard({
   onStatusClick,
   sx,
 }) {
-  // --- [تغيير 4]: حذف الحالات المتعلقة بجلب الخطط ---
-  // const [plans, setPlans] = useState([]); // <-- محذوف
-  // const [loadingPlans, setLoadingPlans] = useState(true); // <-- محذوف
-
-  // الحالات المتبقية خاصة بالنوافذ المنبثقة للخطط والحذف
   const [isAddPlanModalOpen, setIsAddPlanModalOpen] = useState(false);
   const [isEditPlanModalOpen, setIsEditPlanModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -71,10 +57,9 @@ function SubscriptionTypeCard({
   const [itemToDeleteName, setItemToDeleteName] = useState("");
   const [itemToDeleteId, setItemToDeleteId] = useState(null);
 
-  // --- [تغيير 5]: تبسيط دوال التعامل مع الأحداث ---
   const handlePlanChange = () => {
-    onDataChange(); // استدعاء دالة التحديث الشاملة من الأب
-    setIsAddPlanModalOpen(false); // إغلاق النوافذ
+    onDataChange();
+    setIsAddPlanModalOpen(false);
     setIsEditPlanModalOpen(false);
     setSelectedPlan(null);
   };
@@ -82,10 +67,9 @@ function SubscriptionTypeCard({
   const confirmDeleteSubscriptionType = async () => {
     try {
       await deleteSubscriptionType(subscriptionType.id);
-      onDataChange(); // تحديث شامل
+      onDataChange();
     } catch (err) {
       console.error("Error deleting subscription type", err);
-      // يمكنك إضافة تنبيه للمستخدم هنا (notistack)
     } finally {
       closeDeleteConfirmationDialog();
     }
@@ -95,7 +79,7 @@ function SubscriptionTypeCard({
     if (!itemToDeleteId) return;
     try {
       await deleteSubscriptionPlan(itemToDeleteId);
-      onDataChange(); // تحديث شامل
+      onDataChange();
     } catch (error) {
       console.error("Error deleting plan:", error);
     } finally {
@@ -103,9 +87,7 @@ function SubscriptionTypeCard({
     }
   };
 
-  // دوال فتح وإغلاق النوافذ المنبثقة (لا تغيير كبير هنا)
   const openAddPlanModalHandler = () => setIsAddPlanModalOpen(true);
-
   const openEditPlanModalHandler = (plan) => {
     setSelectedPlan(plan);
     setIsEditPlanModalOpen(true);
@@ -129,11 +111,10 @@ function SubscriptionTypeCard({
     setItemToDeleteName("");
   };
 
-  // دالة عرض السعر (تبقى كما هي)
   const displayPrice = (plan) => {
     const price = parseFloat(plan.price);
     const originalPrice = parseFloat(plan.original_price);
-    if (!isNaN(originalPrice) && originalPrice > price) {
+    if (!Number.isNaN(originalPrice) && originalPrice > price) {
       return (
         <MDBox display="flex" alignItems="center">
           <MDTypography variant="body2" fontWeight="medium" color="dark" mr={0.5}>
@@ -152,7 +133,6 @@ function SubscriptionTypeCard({
     return `$${price.toFixed(2)}`;
   };
 
-  // تحليل البيانات (تبقى كما هي)
   const featuresArray = parseJsonSafe(subscriptionType.features);
   const termsArray = parseJsonSafe(subscriptionType.terms_and_conditions);
   const mainChannelInfo = subscriptionType.linked_channels?.find((ch) => ch.is_main);
@@ -163,7 +143,6 @@ function SubscriptionTypeCard({
     featuresArray.length > 0 ||
     termsArray.length > 0;
 
-  // ------------------- Render Logic -------------------
   return (
     <>
       <Card
@@ -177,7 +156,6 @@ function SubscriptionTypeCard({
         }}
       >
         <MDBox p={{ xs: 2, sm: 2.5 }} flexGrow={1} display="flex" flexDirection="column">
-          {/* Card Header: Name and Actions */}
           <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
             <Tooltip title={subscriptionType.name}>
               <MDTypography variant="h6" fontWeight="bold" noWrap sx={{ flexGrow: 1, mr: 1 }}>
@@ -186,7 +164,6 @@ function SubscriptionTypeCard({
             </Tooltip>
             <MDBox display="flex" gap={0.5}>
               <Tooltip title="Edit Type">
-                {/* --- [تغيير 6]: زر التعديل يستدعي دالة onEdit من الأب --- */}
                 <IconButton aria-label="edit-type" color="info" size="small" onClick={onEdit}>
                   <Icon fontSize="small">edit</Icon>
                 </IconButton>
@@ -204,12 +181,10 @@ function SubscriptionTypeCard({
             </MDBox>
           </MDBox>
 
-          {/* <-- [تعديل جديد] إضافة مؤشر الحالة الجديد --> */}
           <MDBox px={0} pb={1} mt={1}>
             <BatchStatusIndicator status={batchStatus} onClick={onStatusClick} />
           </MDBox>
 
-          {/* Main Channel Info */}
           {subscriptionType.main_channel_id && (
             <MDBox mb={1} display="flex" alignItems="center">
               <Tooltip title="Main Channel">
@@ -221,7 +196,7 @@ function SubscriptionTypeCard({
               </MDTypography>
             </MDBox>
           )}
-          {/* Secondary Channels Info */}
+
           {secondaryChannelsInfo.length > 0 && (
             <MDBox mt={0.5} mb={1.5}>
               <MDTypography
@@ -253,7 +228,7 @@ function SubscriptionTypeCard({
               </List>
             </MDBox>
           )}
-          {/* Features Info */}
+
           {featuresArray.length > 0 && (
             <MDBox
               mt={secondaryChannelsInfo.length > 0 || subscriptionType.main_channel_id ? 0.5 : 1}
@@ -295,7 +270,7 @@ function SubscriptionTypeCard({
               </MDBox>
             </MDBox>
           )}
-          {/* Terms & Conditions Info */}
+
           {termsArray.length > 0 && (
             <MDBox
               mt={
@@ -340,11 +315,9 @@ function SubscriptionTypeCard({
             </MDBox>
           )}
 
-          {/* Spacer and Divider */}
           <MDBox flexGrow={1} />
           {hasDetails && <Divider sx={{ my: 1.5 }} />}
 
-          {/* Subscription Plans Section */}
           <MDBox>
             <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <MDTypography variant="subtitle2" fontWeight="bold">
@@ -363,7 +336,6 @@ function SubscriptionTypeCard({
               </Tooltip>
             </MDBox>
 
-            {/* --- [تغيير 7]: عرض الخطط بدون حالة تحميل --- */}
             <MDBox minHeight="80px">
               {plans.length === 0 ? (
                 <MDBox display="flex" justifyContent="center" alignItems="center" py={3}>
@@ -404,15 +376,25 @@ function SubscriptionTypeCard({
                         px: 1.5,
                         mb: 0.75,
                         borderRadius: 1,
-                        bgcolor: "grey.100",
+                        bgcolor: plan.is_trial ? "rgba(0,200,83,0.08)" : "grey.100",
                         "&:hover": { bgcolor: "grey.200" },
                       }}
                     >
                       <ListItemText
                         primary={
-                          <MDTypography variant="body2" fontWeight="medium">
-                            {plan.name}
-                          </MDTypography>
+                          <MDBox display="flex" alignItems="center" gap={1}>
+                            <MDTypography variant="body2" fontWeight="medium">
+                              {plan.name}
+                            </MDTypography>
+                            {plan.is_trial && (
+                              <Chip
+                                size="small"
+                                color="success"
+                                label="TRIAL"
+                                sx={{ height: 20 }}
+                              />
+                            )}
+                          </MDBox>
                         }
                         secondary={
                           <MDTypography variant="caption" color="text.secondary">
@@ -431,14 +413,11 @@ function SubscriptionTypeCard({
         </MDBox>
       </Card>
 
-      {/* --- Modals --- */}
-      {/* --- [تغيير 8]: حذف SubscriptionTypeFormModal من هنا --- */}
-
       <AddSubscriptionPlanModal
         open={isAddPlanModalOpen}
         onClose={() => setIsAddPlanModalOpen(false)}
         subscriptionTypeId={subscriptionType.id}
-        onPlanAdded={handlePlanChange} // <-- تحديث شامل
+        onPlanAdded={handlePlanChange}
       />
 
       {selectedPlan && (
@@ -449,7 +428,7 @@ function SubscriptionTypeCard({
             setSelectedPlan(null);
           }}
           plan={selectedPlan}
-          onPlanUpdated={handlePlanChange} // <-- تحديث شامل
+          onPlanUpdated={handlePlanChange}
         />
       )}
 
