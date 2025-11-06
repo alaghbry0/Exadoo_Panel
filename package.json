@@ -14,7 +14,7 @@
     "axios": "^1.7.9",
     "chart.js": "4.3.0",
     "chroma-js": "2.4.2",
-    "date-fn99s": "^2.30.0",
+    "date-fns": "^2.30.0",
     "dayjs": "^1.11.13",
     "imagekit-javascript": "^4.0.1",
     "lucide-react": "^0.488.0",
