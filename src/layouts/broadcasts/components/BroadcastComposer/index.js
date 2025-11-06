@@ -1,10 +1,6 @@
 // src/layouts/broadcasts/components/BroadcastComposer/index.js
-
-// New: Import useRef to handle the textarea element directly
 import { useState, useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
-
-// @mui material components
 import {
   Card,
   Grid,
@@ -30,161 +26,202 @@ import {
   Tooltip,
 } from "@mui/material";
 
-// Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 
-// API
-import { previewTargetUsers, startBroadcast } from "services/api";
+import { previewTargetUsers, startBroadcast, getSubscriptionPlans } from "services/api";
 
-// All text is now in English
 const steps = ["Select Audience", "Compose Message", "Preview & Send"];
 
 function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
   const [message, setMessage] = useState("");
   const [selectedTarget, setSelectedTarget] = useState("");
-  const [selectedSubType, setSelectedSubType] = useState("");
+
+  // Subscription type + single plan (optional)
+  const [selectedSubscriptionTypeId, setSelectedSubscriptionTypeId] = useState("");
+  const [availablePlans, setAvailablePlans] = useState([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState(""); // "" تعني بدون فلترة
+
+  // preview & sending
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
 
-  // New: Create a ref to hold a reference to the message input element.
-  // This is the standard React way to interact with DOM elements.
   const messageInputRef = useRef(null);
 
-  const targetNeedsSubType = useMemo(
+  // Safe getters
+  const subscriptionTypes = data?.targetGroups?.subscription_types ?? [];
+  const stats = data?.targetGroups?.general_stats ?? {
+    all_users: 0,
+    active_subscribers: 0,
+    expired_subscribers: 0,
+    no_subscription: 0,
+  };
+
+  const notify = (opts) => (typeof setSnackbar === "function" ? setSnackbar(opts) : null);
+
+  const targetNeedsType = useMemo(
     () => ["subscription_type_active", "subscription_type_expired"].includes(selectedTarget),
     [selectedTarget]
   );
 
+  // reset on target change
   useEffect(() => {
-    setSelectedSubType("");
+    setSelectedSubscriptionTypeId("");
+    setAvailablePlans([]);
+    setSelectedPlanId("");
     setPreview(null);
-    if (selectedTarget) {
-      setActiveStep(1);
-    }
+    setActiveStep(selectedTarget ? 1 : 0);
   }, [selectedTarget]);
 
+  // fetch plans when subscription type chosen
   useEffect(() => {
-    const fetchPreview = async () => {
-      if (!selectedTarget || (targetNeedsSubType && !selectedSubType)) {
+    const fetchPlans = async () => {
+      if (!targetNeedsType || !selectedSubscriptionTypeId) {
+        setAvailablePlans([]);
+        setSelectedPlanId("");
+        return;
+      }
+      try {
+        setLoadingPlans(true);
+        const plansArr = await getSubscriptionPlans(Number(selectedSubscriptionTypeId));
+        setAvailablePlans(Array.isArray(plansArr) ? plansArr : []);
+        // لو تغيّر النوع، نظّف اختيار الخطة السابقة
+        setSelectedPlanId("");
+      } catch (error) {
+        console.error("getSubscriptionPlans failed:", error?.response?.data || error);
+        notify({ color: "error", title: "Error", message: "Failed to load subscription plans." });
+      } finally {
+        setLoadingPlans(false);
+      }
+    };
+    fetchPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetNeedsType, selectedSubscriptionTypeId]);
+
+  // when can we preview?
+  const canPreview = useMemo(() => {
+    if (!selectedTarget) return false;
+    if (!targetNeedsType) return true; // مجموعات عامة
+    return !!selectedSubscriptionTypeId; // النوع مطلوب؛ الخطة اختيارية
+  }, [selectedTarget, targetNeedsType, selectedSubscriptionTypeId]);
+
+  // build preview when inputs ready
+  useEffect(() => {
+    const runPreview = async () => {
+      if (!canPreview) {
         setPreview(null);
         return;
       }
       try {
         setPreviewLoading(true);
-        const previewData = await previewTargetUsers(
-          selectedTarget,
-          targetNeedsSubType ? selectedSubType : null
-        );
+        const options = {
+          targetGroup: selectedTarget,
+          subscriptionTypeId: targetNeedsType ? Number(selectedSubscriptionTypeId) : null,
+          // نحول الخطة الواحدة إلى مصفوفة عند الإرسال
+          subscriptionPlanIds: targetNeedsType && selectedPlanId ? [Number(selectedPlanId)] : [],
+          limit: 10,
+        };
+        const previewData = await previewTargetUsers(options);
         setPreview(previewData);
-        if (message.trim()) {
-          setActiveStep(2);
-        }
+        if (message.trim()) setActiveStep(2);
       } catch (error) {
-        setSnackbar({
-          open: true,
-          color: "error",
-          title: "Error",
-          message: "Failed to load user preview.",
-        });
+        console.error("previewTargetUsers failed:", error?.response?.data || error);
+        notify({ color: "error", title: "Error", message: "Failed to load user preview." });
       } finally {
         setPreviewLoading(false);
       }
     };
+    runPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTarget, selectedSubscriptionTypeId, selectedPlanId]);
 
-    fetchPreview();
-  }, [selectedTarget, selectedSubType]);
-
+  // stepper logic
   useEffect(() => {
-    if (message.trim() && preview) {
-      setActiveStep(2);
-    } else if (selectedTarget) {
-      setActiveStep(1);
-    } else {
-      setActiveStep(0);
-    }
+    if (message.trim() && preview) setActiveStep(2);
+    else if (selectedTarget) setActiveStep(1);
+    else setActiveStep(0);
   }, [message, preview, selectedTarget]);
 
+  const insertVariable = (variable) => {
+    const textarea = messageInputRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = `${variable}`;
+      const newMessage = message.substring(0, start) + text + message.substring(end);
+      setMessage(newMessage);
+      setTimeout(() => {
+        textarea.focus();
+        const pos = start + text.length;
+        textarea.setSelectionRange(pos, pos);
+      }, 10);
+    }
+  };
+
   const handleSendBroadcast = async () => {
-    if (!message.trim() || !selectedTarget || (targetNeedsSubType && !selectedSubType)) {
-      setSnackbar({
-        open: true,
+    if (!message.trim() || !selectedTarget || (targetNeedsType && !selectedSubscriptionTypeId)) {
+      notify({
         color: "warning",
         title: "Missing Information",
         message: "Please fill in all required fields to send the broadcast.",
       });
       return;
     }
-
     setIsSending(true);
     try {
-      await startBroadcast(message, selectedTarget, targetNeedsSubType ? selectedSubType : null);
+      const payload = {
+        messageText: message,
+        targetGroup: selectedTarget,
+        subscriptionTypeId: targetNeedsType ? Number(selectedSubscriptionTypeId) : null,
+        subscriptionPlanIds: targetNeedsType && selectedPlanId ? [Number(selectedPlanId)] : [],
+      };
+      await startBroadcast(payload);
       onBroadcastSent();
+      // reset
       setMessage("");
       setSelectedTarget("");
-      setSelectedSubType("");
+      setSelectedSubscriptionTypeId("");
+      setAvailablePlans([]);
+      setSelectedPlanId("");
       setPreview(null);
       setActiveStep(0);
     } catch (error) {
-      const errorMsg = error.response?.data?.error || "An unexpected error occurred while sending.";
-      setSnackbar({ open: true, color: "error", title: "Send Failed", message: errorMsg });
+      const errorMsg =
+        error?.response?.data?.error || "An unexpected error occurred while sending.";
+      notify({ color: "error", title: "Send Failed", message: errorMsg });
     } finally {
       setIsSending(false);
     }
   };
 
-  // Improved: The function now uses the ref for stability and performance.
-  const insertVariable = (variable) => {
-    const textarea = messageInputRef.current; // Get the textarea from the ref
-    if (textarea) {
-      const start = textarea.selectionStart; // Get cursor start position
-      const end = textarea.selectionEnd; // Get cursor end position
-      const text = `${variable}`;
-
-      // Construct the new message with the variable inserted
-      const newMessage = message.substring(0, start) + text + message.substring(end);
-      setMessage(newMessage);
-
-      // This part ensures the cursor is placed right after the inserted variable,
-      // allowing the user to continue typing smoothly.
-      setTimeout(() => {
-        textarea.focus();
-        const newCursorPosition = start + text.length;
-        textarea.setSelectionRange(newCursorPosition, newCursorPosition);
-      }, 10);
-    }
-  };
-
   const getTargetDisplayName = () => {
     if (!selectedTarget) return "";
-    const targetNames = {
-      all_users: `All Users (${data.targetGroups?.general_stats.all_users})`,
-      active_subscribers: `Active Subscribers (${data.targetGroups?.general_stats.active_subscribers})`,
-      expired_subscribers: `Expired Subscribers (${data.targetGroups?.general_stats.expired_subscribers})`,
-      no_subscription: `No Subscription (${data.targetGroups?.general_stats.no_subscription})`,
-      subscription_type_active: "Active in a specific plan",
-      subscription_type_expired: "Expired in a specific plan",
+    const names = {
+      all_users: `All Users (${stats?.all_users ?? 0})`,
+      active_subscribers: `Active Subscribers (${stats?.active_subscribers ?? 0})`,
+      expired_subscribers: `Expired Subscribers (${stats?.expired_subscribers ?? 0})`,
+      no_subscription: `No Subscription (${stats?.no_subscription ?? 0})`,
+      subscription_type_active: "Active – by Subscription Type/Plan",
+      subscription_type_expired: "Expired – by Subscription Type/Plan",
     };
-    return targetNames[selectedTarget] || selectedTarget;
+    return names[selectedTarget] || selectedTarget;
   };
 
   const renderLivePreview = () => {
-    if (!preview || !preview.users || preview.users.length === 0) {
-      return "Your message will appear here...";
-    }
-    let previewText = message;
+    if (!preview?.users?.length) return "Your message will appear here...";
     const firstUser = preview.users[0];
-    previewText = previewText.replace(/{full_name}/g, firstUser.full_name || "John Doe");
-    previewText = previewText.replace(/{username}/g, firstUser.username || "johndoe");
-    return previewText;
+    return (message || "")
+      .replace(/{full_name}/g, firstUser.full_name || "John Doe")
+      .replace(/{username}/g, firstUser.username || "johndoe");
   };
 
   return (
-    <Card elevation={4} sx={{ overflow: "visible" }}>
+    <Card elevation={0} sx={{ overflow: "visible" }}>
       <MDBox p={3}>
         <MDBox display="flex" alignItems="center" mb={3}>
           <Icon sx={{ fontSize: 32, color: "info.main", mr: 2 }}>campaign</Icon>
@@ -198,7 +235,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
           </MDBox>
         </MDBox>
 
-        {/* Progress Stepper */}
+        {/* Stepper */}
         <MDBox mb={4}>
           <Stepper activeStep={activeStep} alternativeLabel>
             {steps.map((label, index) => (
@@ -221,7 +258,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
         </MDBox>
 
         <Grid container spacing={3}>
-          {/* Step 1: Target Selection */}
+          {/* Step 1: Audience */}
           <Grid item xs={12}>
             <Fade in timeout={500}>
               <Paper elevation={0} sx={{ p: 3, border: "1px solid #eee" }}>
@@ -232,7 +269,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                   </MDTypography>
                 </MDBox>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} md={targetNeedsSubType ? 6 : 12}>
+                  <Grid item xs={12} md={targetNeedsType ? 4 : 12}>
                     <FormControl fullWidth>
                       <InputLabel>Select Target Audience</InputLabel>
                       <Select
@@ -240,55 +277,86 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                         onChange={(e) => setSelectedTarget(e.target.value)}
                         label="Select Target Audience"
                       >
-                        <MenuItem value="all_users">
-                          All Users ({data.targetGroups?.general_stats.all_users})
-                        </MenuItem>
+                        <MenuItem value="all_users">All Users ({stats?.all_users ?? 0})</MenuItem>
                         <MenuItem value="active_subscribers">
-                          Active Subscribers ({data.targetGroups?.general_stats.active_subscribers})
+                          Active Subscribers ({stats?.active_subscribers ?? 0})
                         </MenuItem>
                         <MenuItem value="expired_subscribers">
-                          Expired Subscribers (
-                          {data.targetGroups?.general_stats.expired_subscribers})
+                          Expired Subscribers ({stats?.expired_subscribers ?? 0})
                         </MenuItem>
                         <MenuItem value="no_subscription">
-                          No Subscription ({data.targetGroups?.general_stats.no_subscription})
+                          No Subscription ({stats?.no_subscription ?? 0})
                         </MenuItem>
                         <Divider />
                         <MenuItem value="subscription_type_active">
-                          Active in a specific plan
+                          Active – by Subscription Type/Plan
                         </MenuItem>
                         <MenuItem value="subscription_type_expired">
-                          Expired in a specific plan
+                          Expired – by Subscription Type/Plan
                         </MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
-                  {targetNeedsSubType && (
-                    <Grid item xs={12} md={6}>
-                      <Fade in timeout={300}>
+
+                  {targetNeedsType && (
+                    <>
+                      {/* Subscription Type */}
+                      <Grid item xs={12} md={4}>
                         <FormControl fullWidth>
-                          <InputLabel>Select Subscription Plan</InputLabel>
+                          <InputLabel>Select Subscription Type</InputLabel>
                           <Select
-                            value={selectedSubType}
-                            onChange={(e) => setSelectedSubType(e.target.value)}
-                            label="Select Subscription Plan"
+                            value={selectedSubscriptionTypeId}
+                            onChange={(e) => setSelectedSubscriptionTypeId(e.target.value)}
+                            label="Select Subscription Type"
                           >
-                            {data.targetGroups?.subscription_types.map((sub) => (
-                              <MenuItem key={sub.id} value={sub.id}>
-                                {sub.name}
+                            {(subscriptionTypes || []).map((st) => (
+                              <MenuItem key={st.id} value={st.id}>
+                                {st.name}
                               </MenuItem>
                             ))}
                           </Select>
                         </FormControl>
-                      </Fade>
-                    </Grid>
+                      </Grid>
+
+                      {/* Plan (single optional) */}
+                      <Grid item xs={12} md={4}>
+                        <FormControl
+                          fullWidth
+                          disabled={!selectedSubscriptionTypeId || loadingPlans}
+                        >
+                          <InputLabel>Select Plan (optional)</InputLabel>
+                          <Select
+                            value={selectedPlanId}
+                            onChange={(e) => setSelectedPlanId(e.target.value)}
+                            label="Select Plan (optional)"
+                          >
+                            {/* خيار عدم التحديد = أي خطة */}
+                            <MenuItem value="">
+                              <em>Any plan</em>
+                            </MenuItem>
+
+                            {loadingPlans && <MenuItem disabled>Loading...</MenuItem>}
+
+                            {!loadingPlans && !(availablePlans || []).length && (
+                              <MenuItem disabled>No plans found</MenuItem>
+                            )}
+
+                            {(availablePlans || []).map((p) => (
+                              <MenuItem key={p.id} value={p.id}>
+                                {p.name} — {p.duration_days}d {p.is_trial ? "• Trial" : ""}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </>
                   )}
                 </Grid>
               </Paper>
             </Fade>
           </Grid>
 
-          {/* Step 2: Message Composition */}
+          {/* Step 2: Compose */}
           {activeStep >= 1 && (
             <Grid item xs={12}>
               <Fade in timeout={700}>
@@ -308,8 +376,6 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                         fullWidth
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        // New: Attach the ref to the MDInput component.
-                        // It passes the ref to the underlying textarea.
                         inputRef={messageInputRef}
                       />
                     </Grid>
@@ -321,41 +387,47 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                         <MDTypography variant="caption" color="text">
                           Click to insert a variable:
                         </MDTypography>
+
                         <MDBox mb={2}>
                           <MDTypography variant="caption" color="text">
                             User Variables:
                           </MDTypography>
                           <MDBox display="flex" flexWrap="wrap" gap={0.5} mt={0.5}>
-                            {data.variables?.user_variables.map((v) => (
-                              <Tooltip key={v.key} title={v.description}>
-                                <Chip
-                                  label={v.key}
-                                  size="small"
-                                  // The onClick now triggers our improved function
-                                  onClick={() => insertVariable(v.key)}
-                                  sx={{ cursor: "pointer" }}
-                                />
-                              </Tooltip>
-                            ))}
+                            {(data?.variables?.user_variables || []).map((v) =>
+                              v?.key ? (
+                                <Tooltip key={v.key} title={v.description || ""}>
+                                  <Chip
+                                    label={v.key}
+                                    size="small"
+                                    onClick={() => insertVariable(v.key)}
+                                    sx={{ cursor: "pointer" }}
+                                  />
+                                </Tooltip>
+                              ) : null
+                            )}
                           </MDBox>
                         </MDBox>
+
                         <MDBox>
                           <MDTypography variant="caption" color="text">
                             Subscription Variables:
                           </MDTypography>
                           <MDBox display="flex" flexWrap="wrap" gap={0.5} mt={0.5}>
-                            {data.variables?.subscription_variables.map((v) => (
-                              <Tooltip key={v.key} title={v.description}>
-                                <Chip
-                                  label={v.key}
-                                  size="small"
-                                  onClick={() => insertVariable(v.key)}
-                                  sx={{ cursor: "pointer" }}
-                                />
-                              </Tooltip>
-                            ))}
+                            {(data?.variables?.subscription_variables || []).map((v) =>
+                              v?.key ? (
+                                <Tooltip key={v.key} title={v.description || ""}>
+                                  <Chip
+                                    label={v.key}
+                                    size="small"
+                                    onClick={() => insertVariable(v.key)}
+                                    sx={{ cursor: "pointer" }}
+                                  />
+                                </Tooltip>
+                              ) : null
+                            )}
                           </MDBox>
                         </MDBox>
+
                         <MDBox mt={3}>
                           <MDTypography variant="subtitle2" mb={1} fontWeight="bold">
                             Live Preview
@@ -382,7 +454,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
             </Grid>
           )}
 
-          {/* Step 3: Preview and Send */}
+          {/* Step 3: Preview & Send */}
           {activeStep >= 2 && preview && (
             <Grid item xs={12}>
               <Fade in timeout={900}>
@@ -407,6 +479,24 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                               <MDTypography variant="body2">
                                 <strong>Target Audience:</strong> {getTargetDisplayName()}
                               </MDTypography>
+                              {targetNeedsType && selectedSubscriptionTypeId && (
+                                <MDTypography variant="body2">
+                                  <strong>Subscription Type:</strong>{" "}
+                                  {(subscriptionTypes || []).find(
+                                    (t) => String(t.id) === String(selectedSubscriptionTypeId)
+                                  )?.name || selectedSubscriptionTypeId}
+                                </MDTypography>
+                              )}
+                              {targetNeedsType && (
+                                <MDTypography variant="body2">
+                                  <strong>Plan Filter:</strong>{" "}
+                                  {selectedPlanId
+                                    ? availablePlans.find(
+                                        (p) => String(p.id) === String(selectedPlanId)
+                                      )?.name || selectedPlanId
+                                    : "Any plan"}
+                                </MDTypography>
+                              )}
                               <MDTypography variant="body2">
                                 <strong>Total Recipients:</strong> {preview.total_count} users
                               </MDTypography>
@@ -415,7 +505,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                               </MDTypography>
                             </Alert>
                             <List dense sx={{ maxHeight: 200, overflow: "auto" }}>
-                              {preview.users.map((u) => (
+                              {(preview.users || []).map((u) => (
                                 <ListItem key={u.telegram_id}>
                                   <ListItemAvatar>
                                     <Avatar sx={{ width: 32, height: 32 }}>
@@ -424,7 +514,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                                   </ListItemAvatar>
                                   <ListItemText
                                     primary={u.full_name || "Unknown User"}
-                                    secondary={`@${u.username}` || u.telegram_id}
+                                    secondary={u.username ? `@${u.username}` : u.telegram_id}
                                   />
                                 </ListItem>
                               ))}
@@ -433,6 +523,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
                         )}
                       </Card>
                     </Grid>
+
                     <Grid item xs={12} md={6}>
                       <Card
                         variant="outlined"
@@ -485,7 +576,7 @@ function BroadcastComposer({ data, onBroadcastSent, setSnackbar }) {
 BroadcastComposer.propTypes = {
   data: PropTypes.object,
   onBroadcastSent: PropTypes.func.isRequired,
-  setSnackbar: PropTypes.func.isRequired,
+  setSnackbar: PropTypes.func, // ({color,title,message}) => void
 };
 
 export default BroadcastComposer;

@@ -1,5 +1,3 @@
-// src/layouts/broadcasts/index.js
-
 import { useState, useEffect, useCallback } from "react";
 
 // @mui material components
@@ -26,10 +24,40 @@ import { getTargetGroups, getAvailableVariables } from "services/api";
 
 function Broadcasts() {
   const [loading, setLoading] = useState(true);
-  const [composerData, setComposerData] = useState({ targetGroups: null, variables: null });
-  const [snackbar, setSnackbar] = useState({ open: false, color: "info", title: "", message: "" });
 
-  // Re-rendering BroadcastHistory with a new key ensures it fetches fresh data independently.
+  // قيم افتراضية تحمي الواجهة حتى لو فشلت النداءات
+  const [composerData, setComposerData] = useState({
+    targetGroups: {
+      general_stats: {
+        all_users: 0,
+        active_subscribers: 0,
+        expired_subscribers: 0,
+        no_subscription: 0,
+      },
+      subscription_types: [],
+    },
+    variables: { user_variables: [], subscription_variables: [] },
+  });
+
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    color: "info",
+    title: "",
+    message: "",
+    dateTime: new Date().toLocaleString(),
+  });
+
+  // notifier موحّد يضمن dateTime و open
+  const openSnack = (opts = {}) =>
+    setSnackbar((s) => ({
+      open: true,
+      color: opts.color ?? s.color ?? "info",
+      title: opts.title ?? "",
+      message: opts.message ?? "",
+      dateTime: new Date().toLocaleString(),
+    }));
+
+  // نستخدم key لإجبار إعادة تحميل التاريخ بعد الإرسال
   const [historyKey, setHistoryKey] = useState(Date.now());
 
   useEffect(() => {
@@ -41,14 +69,21 @@ function Broadcasts() {
           getAvailableVariables(),
         ]);
         setComposerData({
-          targetGroups: groupsData,
-          variables: variablesData,
+          targetGroups: groupsData ?? {
+            general_stats: {
+              all_users: 0,
+              active_subscribers: 0,
+              expired_subscribers: 0,
+              no_subscription: 0,
+            },
+            subscription_types: [],
+          },
+          variables: variablesData ?? { user_variables: [], subscription_variables: [] },
         });
       } catch (error) {
-        setSnackbar({
-          open: true,
+        console.error("Initial fetch failed:", error?.response?.data || error);
+        openSnack({
           color: "error",
-          // Translation:
           title: "Data Fetch Error",
           message: "Failed to load initial targeting and variable data.",
         });
@@ -61,18 +96,15 @@ function Broadcasts() {
   }, []);
 
   const handleBroadcastSent = useCallback(() => {
-    setSnackbar({
-      open: true,
+    openSnack({
       color: "success",
-      // Translation:
       title: "Success",
       message: "The broadcast job has started.",
     });
-    // Refresh the history by changing the key, forcing a full remount and data fetch.
     setHistoryKey(Date.now());
   }, []);
 
-  const closeSnackbar = () => setSnackbar({ ...snackbar, open: false });
+  const closeSnackbar = () => setSnackbar((s) => ({ ...s, open: false }));
 
   const renderContent = () => {
     if (loading) {
@@ -84,22 +116,22 @@ function Broadcasts() {
     }
 
     return (
-      // UX Improvement: Using a stacked layout for better focus and responsiveness.
       <Grid container spacing={3}>
         {/* Broadcast Composer */}
         <Grid item xs={12}>
-          <BroadcastComposer
-            data={composerData}
-            onBroadcastSent={handleBroadcastSent}
-            setSnackbar={setSnackbar}
-          />
+          <Card>
+            <BroadcastComposer
+              data={composerData}
+              onBroadcastSent={handleBroadcastSent}
+              setSnackbar={openSnack}
+            />
+          </Card>
         </Grid>
 
         {/* Broadcast History */}
         <Grid item xs={12}>
-          {/* UX Improvement: Wrapping history in a Card for consistent styling. */}
           <Card>
-            <BroadcastHistory key={historyKey} setSnackbar={setSnackbar} />
+            <BroadcastHistory key={historyKey} setSnackbar={openSnack} />
           </Card>
         </Grid>
       </Grid>
@@ -111,7 +143,6 @@ function Broadcasts() {
       <DashboardNavbar />
       <MDBox py={3}>
         <MDBox mb={3}>
-          {/* Translation: */}
           <MDTypography variant="h4" fontWeight="medium">
             Marketing Broadcasts
           </MDTypography>
@@ -126,8 +157,9 @@ function Broadcasts() {
       <MDSnackbar
         color={snackbar.color}
         icon={snackbar.color === "success" ? "check" : "warning"}
-        title={snackbar.title}
-        content={snackbar.message}
+        title={snackbar.title || "Notification"}
+        content={snackbar.message || ""}
+        dateTime={snackbar.dateTime || new Date().toLocaleString()}
         open={snackbar.open}
         onClose={closeSnackbar}
         close={closeSnackbar}

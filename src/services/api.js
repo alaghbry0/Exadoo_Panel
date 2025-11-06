@@ -296,26 +296,32 @@ export const getTargetGroups = async () => {
   return response.data;
 };
 
-export const previewTargetUsers = async (targetGroup, subscriptionTypeId = null) => {
-  const response = await apiClient.post("/api/admin/messaging/preview-users", {
-    target_group: targetGroup,
-    subscription_type_id: subscriptionTypeId,
-    limit: 10,
-  });
-  return response.data;
-};
-
 export const getAvailableVariables = async () => {
   const response = await apiClient.get("/api/admin/messaging/available-variables");
   return response.data;
 };
 
-export const startBroadcast = async (messageText, targetGroup, subscriptionTypeId = null) => {
-  const response = await apiClient.post("/api/admin/messaging/broadcast", {
-    message_text: messageText,
-    target_group: targetGroup,
-    subscription_type_id: subscriptionTypeId,
-  });
+export const previewTargetUsers = async (options) => {
+  // options = { targetGroup, subscriptionTypeId?, subscriptionPlanIds?, limit? }
+  const payload = {
+    target_group: options.targetGroup,
+    subscription_type_id: options.subscriptionTypeId ?? null,
+    subscription_plan_ids: options.subscriptionPlanIds ?? [],
+    limit: options.limit ?? 10,
+  };
+  const response = await apiClient.post("/api/admin/messaging/preview-users", payload);
+  return response.data;
+};
+
+export const startBroadcast = async (options) => {
+  // options = { messageText, targetGroup, subscriptionTypeId?, subscriptionPlanIds? }
+  const payload = {
+    message_text: options.messageText,
+    target_group: options.targetGroup,
+    subscription_type_id: options.subscriptionTypeId ?? null,
+    subscription_plan_ids: options.subscriptionPlanIds ?? [],
+  };
+  const response = await apiClient.post("/api/admin/messaging/broadcast", payload);
   return response.data;
 };
 
