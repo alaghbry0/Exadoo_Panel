@@ -108,7 +108,11 @@ function DiscountFormModal({
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // خطط نطاق التطبيق (type -> plans)
   const [filteredPlans, setFilteredPlans] = useState([]);
+  // خطط استهداف المشتركين الحاليين (current_type -> current_plans)
+  const [filteredCurrentPlans, setFilteredCurrentPlans] = useState([]);
 
   const defaultTier = {
     tier_order: 1,
@@ -117,6 +121,7 @@ function DiscountFormModal({
     display_fake_count: false,
     fake_count_value: "",
   };
+
   const defaultState = {
     name: "",
     description: "",
@@ -134,74 +139,92 @@ function DiscountFormModal({
     target_audience: "all_new",
     price_lock_duration_months: "",
     tiers: [defaultTier],
+    // فلاتر الاستهداف للمشتركين الحاليين:
+    target_current_subscription_type_id: "",
+    target_current_subscription_plan_id: "",
+    target_current_is_free: false,
+    target_include_expired: true,
   };
 
   const [formData, setFormData] = useState(defaultState);
   const mode = initialData ? "edit" : "add";
 
   useEffect(() => {
-    if (open) {
-      if (initialData) {
-        // ⭐ الحل النهائي: تحليل سلسلة tiers النصية وتحويلها إلى مصفوفة
-        let parsedTiers = [defaultTier];
-        if (initialData.tiers) {
-          if (typeof initialData.tiers === "string") {
-            try {
-              const tiersFromString = JSON.parse(initialData.tiers);
-              if (Array.isArray(tiersFromString) && tiersFromString.length > 0) {
-                parsedTiers = tiersFromString;
-              }
-            } catch (e) {
-              console.error("Failed to parse tiers JSON string:", e);
-              // إذا فشل التحليل، سيتم استخدام القيمة الافتراضية
+    if (!open) return;
+
+    if (initialData) {
+      // Parse tiers (قد تأتي نص JSON)
+      let parsedTiers = [defaultTier];
+      if (initialData.tiers) {
+        if (typeof initialData.tiers === "string") {
+          try {
+            const tiersFromString = JSON.parse(initialData.tiers);
+            if (Array.isArray(tiersFromString) && tiersFromString.length > 0) {
+              parsedTiers = tiersFromString;
             }
-          } else if (Array.isArray(initialData.tiers) && initialData.tiers.length > 0) {
-            parsedTiers = initialData.tiers;
+          } catch (e) {
+            console.error("Failed to parse tiers JSON string:", e);
           }
+        } else if (Array.isArray(initialData.tiers) && initialData.tiers.length > 0) {
+          parsedTiers = initialData.tiers;
         }
-
-        const finalState = {
-          ...defaultState,
-          ...initialData,
-          name: initialData.name || "",
-          description: initialData.description || "",
-          discount_value: initialData.discount_value ?? "",
-          max_users: initialData.max_users ?? "",
-          applicable_to_subscription_type_id: initialData.applicable_to_subscription_type_id || "",
-          applicable_to_subscription_plan_id: initialData.applicable_to_subscription_plan_id || "",
-          price_lock_duration_months: initialData.price_lock_duration_months ?? "",
-          start_date: initialData.start_date ? dayjs(initialData.start_date) : null,
-          end_date: initialData.end_date ? dayjs(initialData.end_date) : null,
-          tiers: parsedTiers, // استخدم المصفوفة التي تم تحليلها هنا
-        };
-        setFormData(finalState);
-
-        const typeId = initialData.applicable_to_subscription_type_id || "";
-        setFilteredPlans(
-          typeId ? availablePlans.filter((p) => p.subscription_type_id === typeId) : []
-        );
-      } else {
-        setFormData(defaultState);
-        setFilteredPlans([]);
       }
+
+      const finalState = {
+        ...defaultState,
+        ...initialData,
+        name: initialData.name || "",
+        description: initialData.description || "",
+        discount_value: initialData.discount_value ?? "",
+        max_users: initialData.max_users ?? "",
+        applicable_to_subscription_type_id: initialData.applicable_to_subscription_type_id || "",
+        applicable_to_subscription_plan_id: initialData.applicable_to_subscription_plan_id || "",
+        price_lock_duration_months: initialData.price_lock_duration_months ?? "",
+        start_date: initialData.start_date ? dayjs(initialData.start_date) : null,
+        end_date: initialData.end_date ? dayjs(initialData.end_date) : null,
+        tiers: parsedTiers,
+        target_current_subscription_type_id: initialData.target_current_subscription_type_id ?? "",
+        target_current_subscription_plan_id: initialData.target_current_subscription_plan_id ?? "",
+        target_current_is_free: !!initialData.target_current_is_free,
+        target_include_expired: initialData.target_include_expired !== false, // default true
+      };
+      setFormData(finalState);
+
+      // نطاق التطبيق
+      const typeId = initialData.applicable_to_subscription_type_id || "";
+      setFilteredPlans(
+        typeId ? availablePlans.filter((p) => p.subscription_type_id === typeId) : []
+      );
+
+      // الاستهداف الحالي
+      const currTypeId = initialData.target_current_subscription_type_id || "";
+      setFilteredCurrentPlans(
+        currTypeId ? availablePlans.filter((p) => p.subscription_type_id === currTypeId) : []
+      );
+    } else {
+      setFormData(defaultState);
+      setFilteredPlans([]);
+      setFilteredCurrentPlans([]);
     }
   }, [initialData, open, availablePlans]);
 
   const handleChange = (e, toggleValue) => {
     const name = e.target.name;
+
     if (name === "is_tiered" && toggleValue !== null) {
       setFormData((prev) => {
-        const isSwitchingToTiered = toggleValue === true;
-        const currentTiersAreInvalid = !Array.isArray(prev.tiers) || prev.tiers.length === 0;
-        if (isSwitchingToTiered && currentTiersAreInvalid) {
-          return { ...prev, is_tiered: true, tiers: [defaultTier] };
-        }
+        const toTiered = toggleValue === true;
+        const invalidTiers = !Array.isArray(prev.tiers) || prev.tiers.length === 0;
+        if (toTiered && invalidTiers) return { ...prev, is_tiered: true, tiers: [defaultTier] };
         return { ...prev, is_tiered: toggleValue };
       });
       return;
     }
+
     const { value, type, checked } = e.target;
     const inputValue = type === "checkbox" || type === "switch" ? checked : value;
+
+    // نطاق التطبيق
     if (name === "applicable_to_subscription_type_id") {
       setFormData((prev) => ({
         ...prev,
@@ -211,20 +234,48 @@ function DiscountFormModal({
       setFilteredPlans(
         inputValue ? availablePlans.filter((p) => p.subscription_type_id === inputValue) : []
       );
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: inputValue }));
+      return;
     }
+
+    // استهداف المشتركين الحاليين
+    if (name === "target_current_subscription_type_id") {
+      setFormData((prev) => ({
+        ...prev,
+        target_current_subscription_type_id: inputValue,
+        target_current_subscription_plan_id: "",
+      }));
+      setFilteredCurrentPlans(
+        inputValue ? availablePlans.filter((p) => p.subscription_type_id === inputValue) : []
+      );
+      return;
+    }
+
+    if (name === "target_current_is_free") {
+      const nextIsFree = !!inputValue;
+      setFormData((prev) => ({
+        ...prev,
+        target_current_is_free: nextIsFree,
+        target_current_subscription_type_id: nextIsFree
+          ? ""
+          : prev.target_current_subscription_type_id,
+        target_current_subscription_plan_id: nextIsFree
+          ? ""
+          : prev.target_current_subscription_plan_id,
+      }));
+      if (nextIsFree) setFilteredCurrentPlans([]);
+      return;
+    }
+
+    // باقي الحقول
+    setFormData((prev) => ({ ...prev, [name]: inputValue }));
   };
 
   const handleTierChange = (index, field, value) => {
     setFormData((prev) => {
       if (!Array.isArray(prev.tiers)) return prev;
-      const newTiers = prev.tiers.map((tier, i) => {
-        if (i === index) {
-          return { ...tier, [field]: value };
-        }
-        return tier;
-      });
+      const newTiers = prev.tiers.map((tier, i) =>
+        i === index ? { ...tier, [field]: value } : tier
+      );
       return { ...prev, tiers: newTiers };
     });
   };
@@ -241,9 +292,7 @@ function DiscountFormModal({
 
   const removeTier = (index) => {
     setFormData((prev) => {
-      if (!Array.isArray(prev.tiers) || prev.tiers.length <= 1) {
-        return prev;
-      }
+      if (!Array.isArray(prev.tiers) || prev.tiers.length <= 1) return prev;
       const newTiers = prev.tiers
         .filter((_, i) => i !== index)
         .map((tier, idx) => ({ ...tier, tier_order: idx + 1 }));
@@ -254,7 +303,7 @@ function DiscountFormModal({
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      let commonData = {
+      const commonData = {
         name: formData.name,
         description: formData.description,
         is_active: formData.is_active,
@@ -266,11 +315,26 @@ function DiscountFormModal({
         lose_on_lapse: formData.lose_on_lapse,
       };
 
+      const audienceTargeting =
+        formData.target_audience === "existing_subscribers"
+          ? {
+              target_current_subscription_type_id: formData.target_current_is_free
+                ? null
+                : formData.target_current_subscription_type_id || null,
+              target_current_subscription_plan_id: formData.target_current_is_free
+                ? null
+                : formData.target_current_subscription_plan_id || null,
+              target_current_is_free: !!formData.target_current_is_free,
+              target_include_expired: !!formData.target_include_expired,
+            }
+          : {};
+
       let dataToSubmit;
       if (formData.is_tiered) {
         const tiersToSubmit = Array.isArray(formData.tiers) ? formData.tiers : [];
         dataToSubmit = {
           ...commonData,
+          ...audienceTargeting,
           is_tiered: true,
           lock_in_price: formData.lock_in_price,
           price_lock_duration_months: formData.price_lock_duration_months
@@ -288,6 +352,7 @@ function DiscountFormModal({
       } else {
         dataToSubmit = {
           ...commonData,
+          ...audienceTargeting,
           is_tiered: false,
           discount_type: formData.discount_type,
           discount_value: parseFloat(formData.discount_value),
@@ -303,7 +368,7 @@ function DiscountFormModal({
         await createDiscount(dataToSubmit);
         enqueueSnackbar("Discount created successfully!", { variant: "success" });
       }
-      onSuccess();
+      onSuccess?.();
     } catch (err) {
       console.error("Failed to save discount:", err);
       enqueueSnackbar(err.response?.data?.error || "An error occurred.", { variant: "error" });
@@ -356,6 +421,7 @@ function DiscountFormModal({
                     />
                   </Grid>
                 </Grid>
+
                 <Divider sx={{ my: 2 }} />
                 <MDTypography variant="h6">Discount Type</MDTypography>
                 <ToggleButtonGroup
@@ -396,6 +462,7 @@ function DiscountFormModal({
                       Add Tier
                     </MDButton>
                   </Box>
+
                   <Divider sx={{ my: 2 }} />
                   <MDTypography variant="h6" sx={{ mb: 1 }}>
                     Price Lock Rules
@@ -502,6 +569,7 @@ function DiscountFormModal({
                       </Select>
                     </FormControl>
                   </Grid>
+
                   <Grid item xs={12} sm={6}>
                     <FormControlLabel
                       control={
@@ -514,6 +582,94 @@ function DiscountFormModal({
                       label="User loses discount if subscription expires."
                     />
                   </Grid>
+
+                  {/* Audience Targeting (Existing subscribers only) */}
+                  {formData.target_audience === "existing_subscribers" && (
+                    <>
+                      <Grid item xs={12}>
+                        <Divider sx={{ my: 1 }} />
+                        <MDTypography variant="subtitle2" sx={{ mb: 1 }}>
+                          Audience Targeting (Existing subscribers)
+                        </MDTypography>
+                      </Grid>
+
+                      <Grid item xs={12} sm={6}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={formData.target_current_is_free}
+                              onChange={handleChange}
+                              name="target_current_is_free"
+                            />
+                          }
+                          label="Only users currently on a FREE plan"
+                        />
+                      </Grid>
+
+                      <Grid item xs={12} sm={6}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={formData.target_include_expired}
+                              onChange={handleChange}
+                              name="target_include_expired"
+                            />
+                          }
+                          label="Include expired subscribers"
+                        />
+                      </Grid>
+
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth disabled={formData.target_current_is_free}>
+                          <InputLabel>Current Type (optional)</InputLabel>
+                          <Select
+                            name="target_current_subscription_type_id"
+                            value={formData.target_current_subscription_type_id}
+                            label="Current Type (optional)"
+                            onChange={handleChange}
+                          >
+                            <MenuItem value="">
+                              <em>Any Type</em>
+                            </MenuItem>
+                            {subscriptionTypes.map((type) => (
+                              <MenuItem key={type.id} value={type.id}>
+                                {type.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+
+                      <Grid item xs={12} sm={6}>
+                        <FormControl
+                          fullWidth
+                          disabled={
+                            formData.target_current_is_free ||
+                            !formData.target_current_subscription_type_id
+                          }
+                        >
+                          <InputLabel>Current Plan (optional)</InputLabel>
+                          <Select
+                            name="target_current_subscription_plan_id"
+                            value={formData.target_current_subscription_plan_id}
+                            onChange={handleChange}
+                            label="Current Plan (optional)"
+                          >
+                            <MenuItem value="">
+                              <em>Any Plan in Type</em>
+                            </MenuItem>
+                            {filteredCurrentPlans.map((plan) => (
+                              <MenuItem key={plan.id} value={plan.id}>
+                                {plan.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </>
+                  )}
+
+                  {/* نطاق التطبيق (إلى أي نوع/خطة يطبَّق الخصم) */}
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>
                       <InputLabel>Applicable to Type</InputLabel>
@@ -534,6 +690,7 @@ function DiscountFormModal({
                       </Select>
                     </FormControl>
                   </Grid>
+
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth disabled={!formData.applicable_to_subscription_type_id}>
                       <InputLabel>Applicable to Plan (Optional)</InputLabel>
@@ -554,6 +711,7 @@ function DiscountFormModal({
                       </Select>
                     </FormControl>
                   </Grid>
+
                   <Grid item xs={12} sm={6}>
                     <DateTimePicker
                       label="Start Date (Optional)"
@@ -562,6 +720,7 @@ function DiscountFormModal({
                       renderInput={(params) => <TextField {...params} fullWidth />}
                     />
                   </Grid>
+
                   <Grid item xs={12} sm={6}>
                     <DateTimePicker
                       label="End Date (Optional)"
@@ -575,6 +734,7 @@ function DiscountFormModal({
             </Grid>
           </Grid>
         </DialogContent>
+
         <DialogActions sx={{ p: "16px 24px" }}>
           <MDButton onClick={onClose} color="secondary">
             Cancel

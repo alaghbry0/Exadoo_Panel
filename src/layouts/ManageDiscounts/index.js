@@ -118,6 +118,8 @@ function ManageDiscounts() {
                 discount={discount}
                 onEdit={() => handleOpenModal(discount)}
                 onDataChange={fetchData}
+                subscriptionTypes={subscriptionTypes}
+                availablePlans={availablePlans}
               />
             </Grid>
           ))}

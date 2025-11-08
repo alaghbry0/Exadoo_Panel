@@ -1,32 +1,55 @@
-// src/layouts/ManageDiscounts/components/DiscountCard.jsx
-
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, Chip, Tooltip, IconButton, Divider, Box, LinearProgress } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import PeopleIcon from "@mui/icons-material/People";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import LayersIcon from "@mui/icons-material/Layers";
-import LockClockIcon from "@mui/icons-material/LockClock"; // أيقونة أفضل لتثبيت السعر
+import LockClockIcon from "@mui/icons-material/LockClock";
 import { useSnackbar } from "notistack";
+
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import { applyDiscountToExisting } from "services/api";
 
-function DiscountCard({ discount, onEdit, onDataChange }) {
+function DiscountCard({
+  discount,
+  onEdit,
+  onDataChange,
+  subscriptionTypes = [],
+  availablePlans = [],
+}) {
   const { enqueueSnackbar } = useSnackbar();
   const [isApplying, setIsApplying] = useState(false);
 
-  // ⭐ الاعتماد على is_tiered بدلاً من is_tiered_pricing
   const isTiered = discount.is_tiered;
+
+  const activeTier =
+    isTiered && Array.isArray(discount.tiers)
+      ? discount.tiers.find((t) => t.is_active && t.used_slots < t.max_slots)
+      : null;
+
+  const currentTypeName = useMemo(() => {
+    const id = discount.target_current_subscription_type_id;
+    if (!id) return null;
+    const t = subscriptionTypes.find((x) => x.id === id);
+    return t ? t.name : `Type #${id}`;
+  }, [subscriptionTypes, discount.target_current_subscription_type_id]);
+
+  const currentPlanName = useMemo(() => {
+    const id = discount.target_current_subscription_plan_id;
+    if (!id) return null;
+    const p = availablePlans.find((x) => x.id === id);
+    return p ? p.name : `Plan #${id}`;
+  }, [availablePlans, discount.target_current_subscription_plan_id]);
 
   const handleApply = async () => {
     if (discount.potential_recipients_count === 0) return;
     setIsApplying(true);
     try {
-      const response = await applyDiscountToExisting(discount.id);
-      enqueueSnackbar(response.message || "Discount applied successfully!", { variant: "success" });
-      onDataChange(); // تحديث البيانات بعد التطبيق الناجح
+      const { data } = await applyDiscountToExisting(discount.id);
+      enqueueSnackbar(data?.message || "Discount applied successfully!", { variant: "success" });
+      onDataChange?.();
     } catch (err) {
       enqueueSnackbar(err.response?.data?.error || "Failed to apply.", { variant: "error" });
     } finally {
@@ -35,10 +58,6 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
   };
 
   const audienceColors = { all_new: "success", existing_subscribers: "warning" };
-  const activeTier =
-    isTiered && Array.isArray(discount.tiers)
-      ? discount.tiers.find((t) => t.is_active && t.used_slots < t.max_slots)
-      : null;
 
   return (
     <Card sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -62,9 +81,11 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
             </IconButton>
           </Tooltip>
         </MDBox>
+
         <MDTypography variant="body2" sx={{ color: "text.secondary", mt: 1, minHeight: "40px" }}>
           {discount.description || "No description provided."}
         </MDTypography>
+
         <Divider sx={{ my: 2 }} />
 
         {/* Details */}
@@ -74,11 +95,12 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
               Target
             </MDTypography>
             <Chip
-              label={discount.target_audience.replace(/_/g, " ")}
+              label={discount.target_audience?.replace(/_/g, " ")}
               color={audienceColors[discount.target_audience] || "default"}
               size="small"
             />
           </MDBox>
+
           <MDBox display="flex" justifyContent="space-between">
             <MDTypography variant="caption" sx={{ color: "text.secondary" }}>
               Status
@@ -89,7 +111,7 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
               size="small"
             />
           </MDBox>
-          {/* ⭐ تحسين عرض تثبيت السعر */}
+
           {discount.lock_in_price && (
             <MDBox display="flex" justifyContent="space-between" alignItems="center">
               <MDBox display="flex" alignItems="center" gap={0.5}>
@@ -108,12 +130,27 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
         </MDBox>
 
         <Divider sx={{ my: 2 }} />
+
         <MDTypography variant="subtitle2" fontWeight="medium" mb={1.5}>
           Statistics
         </MDTypography>
 
-        {/* Stats */}
         <MDBox display="flex" flexDirection="column" gap={2}>
+          {/* Potential recipients */}
+          {"potential_recipients_count" in discount && (
+            <MDBox display="flex" justifyContent="space-between" alignItems="center">
+              <MDBox display="flex" alignItems="center" gap={0.5}>
+                <PeopleIcon fontSize="small" color="primary" />
+                <MDTypography variant="caption" sx={{ color: "text.secondary" }}>
+                  Potential Recipients
+                </MDTypography>
+              </MDBox>
+              <MDTypography variant="body2" fontWeight="bold">
+                {discount.potential_recipients_count ?? 0}
+              </MDTypography>
+            </MDBox>
+          )}
+
           <MDBox display="flex" justifyContent="space-between" alignItems="center">
             <MDBox display="flex" alignItems="center" gap={0.5}>
               <CheckCircleIcon fontSize="small" color="success" />
@@ -126,7 +163,6 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
             </MDTypography>
           </MDBox>
 
-          {/* ⭐ إعادة هيكلة عرض إحصائيات الاستخدام */}
           {isTiered ? (
             <Box>
               <MDBox display="flex" alignItems="center" gap={0.5} mb={1}>
@@ -142,7 +178,11 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
                   </MDTypography>
                   <LinearProgress
                     variant="determinate"
-                    value={(activeTier.used_slots / activeTier.max_slots) * 100}
+                    value={
+                      activeTier.max_slots > 0
+                        ? (activeTier.used_slots / activeTier.max_slots) * 100
+                        : 0
+                    }
                   />
                   <MDBox display="flex" justifyContent="space-between" mt={0.5}>
                     <MDTypography variant="caption">{activeTier.used_slots} used</MDTypography>
@@ -159,7 +199,6 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
               )}
             </Box>
           ) : (
-            // عرض إحصائيات الخصم العادي فقط إذا كان لديه حد أقصى للمستخدمين
             discount.max_users && (
               <Box>
                 <MDBox display="flex" alignItems="center" gap={0.5} mb={1}>
@@ -170,7 +209,9 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
                 </MDBox>
                 <LinearProgress
                   variant="determinate"
-                  value={(discount.usage_count / discount.max_users) * 100}
+                  value={
+                    discount.max_users > 0 ? (discount.usage_count / discount.max_users) * 100 : 0
+                  }
                 />
                 <MDBox display="flex" justifyContent="space-between" mt={0.5}>
                   <MDTypography variant="caption">{discount.usage_count} used</MDTypography>
@@ -182,7 +223,7 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
         </MDBox>
       </MDBox>
 
-      {/* Action Button */}
+      {/* Apply button */}
       {discount.target_audience === "existing_subscribers" && discount.is_active && (
         <Box p={2.5} pt={1} mt="auto">
           <MDButton
@@ -194,6 +235,26 @@ function DiscountCard({ discount, onEdit, onDataChange }) {
           >
             {isApplying ? "Applying..." : `Apply to ${discount.potential_recipients_count} Users`}
           </MDButton>
+        </Box>
+      )}
+
+      {/* Audience targeting badges */}
+      {discount.target_audience === "existing_subscribers" && (
+        <Box px={2.5} pb={2.5} pt={0.5} display="flex" flexWrap="wrap" gap={0.5}>
+          {discount.target_current_is_free && (
+            <Chip size="small" color="info" label="Current: Free only" />
+          )}
+          {!discount.target_current_is_free && currentTypeName && (
+            <Chip size="small" color="default" label={`Current Type: ${currentTypeName}`} />
+          )}
+          {!discount.target_current_is_free && currentPlanName && (
+            <Chip size="small" color="default" label={`Current Plan: ${currentPlanName}`} />
+          )}
+          <Chip
+            size="small"
+            color={discount.target_include_expired ? "warning" : "success"}
+            label={discount.target_include_expired ? "Include expired: Yes" : "Include expired: No"}
+          />
         </Box>
       )}
     </Card>
