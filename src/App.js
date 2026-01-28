@@ -91,7 +91,7 @@ export default function App() {
 
     script.onload = () => {
       window.ChatWidget?.init({
-        projectId: "Exaado Admin bannel",
+        projectId: "Exaado Admin panel",
         apiUrl: "https://exadoo-rxr9.onrender.com/bot/chat/stream",
         theme: "light",
         position: "bottom-right",
@@ -143,7 +143,7 @@ export default function App() {
           <Sidenav
             color={sidenavColor}
             brand={(transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite}
-            brandName="Exaado Bannel"
+            brandName="Exaado panel"
             routes={routes}
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
