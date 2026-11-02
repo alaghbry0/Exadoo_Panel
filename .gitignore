@@ -26,3 +26,9 @@ package-lock.json
 yarn.lock
 
 commit.sh
+
+# HARDEN-1: لا تتبع أسرارًا ولا نسخًا احتياطية لقاعدة البيانات في git
+# (إزالة من الفهرس لا تُخرجها من التاريخ — راجع وصف الـPR للتدوير)
+/backup.dump
+/backup6.sql
+*.dump
